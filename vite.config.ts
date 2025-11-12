@@ -50,7 +50,6 @@ export default defineConfig({
       input: {
         background: resolve(pagesDir, 'background', 'index.ts'),
         contentUI: resolve(pagesDir, 'content', 'ui', 'index.ts'),
-        popup: resolve(pagesDir, 'popup', 'index.html'),
         contentStyle: resolve(pagesDir, 'content', 'style.scss'),
       },
       output: {

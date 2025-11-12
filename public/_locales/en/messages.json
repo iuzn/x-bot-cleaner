@@ -1,8 +1,8 @@
 {
   "extensionDescription": {
-    "message": "Extension Boilerplate"
+    "message": "Manually identify and bulk remove bot followers from your X (Twitter) account while preserving legitimate followers."
   },
   "extensionName": {
-    "message": "Extension Boilerplate"
+    "message": "X Bot Cleaner"
   }
 }

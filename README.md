@@ -1,96 +1,93 @@
-# Extension Boilerplate
+# X Bot Cleaner
 
-![Extension Boilerplate Logo](public/banner.png)
+A Chrome extension to manually identify and bulk remove bot followers from your X (Twitter) account while preserving legitimate followers.
 
-A minimalist, type-safe browser extension boilerplate built with cutting-edge technologies for maximum productivity and simplicity.
+## Features
 
-## 🚀 Features
+- **Manual Bot Detection**: Mark followers as "Real" or "Bot" with a single click
+- **Persistent Storage**: Your classifications are saved locally and persist across sessions
+- **Hide Bots**: Toggle visibility of bot-marked accounts to focus on real followers
+- **Bulk Removal**: Remove all bot-marked followers with one click
+- **Safe Operation**: Only removes accounts you've explicitly marked as bots
+- **Rate Limit Protection**: Automatic delays between removals to avoid API restrictions
+- **Real-time Metrics**: Track coverage, trusted followers, and flagged bots
+- **Dynamic UI**: Automatically detects follower pages and injects control buttons
+- **Cross-device Sync**: Uses Chrome's sync storage (when enabled) to sync classifications across devices
 
-- ⚡️ **Vite 7** - Lightning fast build tool with advanced HMR
-- 🔒 **TypeScript 5** - Full type safety with latest features
-- ⚛️ **React 19** - Latest React with modern hooks and concurrent features
-- 🎨 **TailwindCSS 3.4** - Utility-first CSS framework with custom design system
-- 🔄 **Advanced HMR** - Hot Module Replacement for all extension contexts
-- 📦 **Manifest V3** - Modern Chrome extension standard
-- 🦊 **Firefox Support** - Cross-browser compatibility with dedicated builds
-- 🎯 **Dynamic SCSS Generation** - Automated Tailwind classes with dark mode support
-- 🎭 **Framer Motion** - Smooth animations and transitions
-- 🎨 **Iconsax React** - Beautiful icon library
-- 🔧 **WebExtension Polyfill** - Cross-browser API compatibility
-- 📜 **Sass Support** - Advanced CSS preprocessing
-- 🛠️ **Custom Build Scripts** - Automated zipping and deployment
+## How It Works
 
-## 🎨 Dynamic SCSS Class Generation
+1. Navigate to your X/Twitter followers page (`https://x.com/[username]/followers`)
+2. The extension automatically detects the followers page and injects "Real" and "Bot" buttons next to each follower
+3. Click "Bot" on suspicious accounts (they'll be highlighted in red)
+4. Click "Real" on legitimate followers (they'll be highlighted in green)
+5. Use the control panel to:
+   - View statistics (trusted followers, flagged bots, coverage percentage)
+   - Hide/show bots in the follower list
+   - Remove all marked bots at once with progress tracking
 
-One of the standout features of this boilerplate is its intelligent SCSS system that dynamically generates TailwindCSS utility classes:
+## Installation
 
-### Key Features:
+### From Source
 
-- **Automatic Dark Mode Support** - Every color class automatically generates its dark mode counterpart
-- **Custom Color Palette** - Extension-specific color scheme with prefix system
-- **Smart Class Generation** - Background, text, border, outline, ring, and shadow utilities
-- **SCSS Variables** - Configurable extension ID and color schemes
-- **Performance Optimized** - Only generates used classes at build time
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/yourusername/x-bot-cleaner.git
+   cd x-bot-cleaner
+   ```
 
-### Example Usage:
+2. Install dependencies:
+   ```bash
+   # Using Bun (recommended)
+   bun install
+   
+   # Or using npm
+   npm install
+   ```
 
-```scss
-// Automatically generates:
-// .bg-w-50, .bg-w-100, .bg-w-200, ... .dark:bg-neutral-950, .dark:bg-neutral-900, etc.
-// .text-w-50, .text-w-100, ... with dark mode variants
-// .border-w-50, .ring-w-50, .shadow-w-50, etc.
-```
+3. Build the extension:
+   ```bash
+   bun build
+   # or
+   npm run build
+   ```
 
-This system eliminates the need for manual dark mode classes and ensures consistent theming across your extension.
+4. Load the extension in Chrome:
+   - Open Chrome and navigate to `chrome://extensions`
+   - Enable "Developer mode" (toggle in top right)
+   - Click "Load unpacked"
+   - Select the `build` directory from this project
 
-## 📦 Installation
+5. Visit your X/Twitter followers page (`https://x.com/[username]/followers`)
 
-1. Clone the repository
-
-2. Install dependencies
-
-```bash
-# Using Bun (recommended)
-bun i
-
-# Or using npm
-npm install
-```
-
-3. Start development server
-
-```bash
-bun dev
-```
-
-## 🛠️ Development
+## Development
 
 ### Available Scripts
 
-- `bun dev` - Start development server with HMR
+- `bun dev` - Start development server with Hot Module Replacement (HMR)
 - `bun build` - Build for production
 - `bun build:watch` - Build and watch for changes
-- `bun build:firefox` - Build for Firefox
-- `bun dev:firefox` - Start Firefox development server
 - `bun lint` - Run ESLint
 - `bun lint:fix` - Fix ESLint issues
-- `bun prettier` - Format code
+- `bun prettier` - Format code with Prettier
 
 ### Project Structure
 
 ```
 ├── src/
-│   ├── components/        # Reusable React components
+│   ├── components/        # React components
 │   │   ├── layout/        # Layout components
 │   │   └── views/         # Main view components
-│   ├── context/           # React contexts
+│   ├── context/           # React contexts (VisibilityContext)
 │   ├── hooks/             # Custom React hooks
 │   ├── lib/               # Core libraries and utilities
 │   ├── pages/             # Extension entry points
-│   │   ├── background/    # Background script
-│   │   ├── content/       # Content scripts and styles
-│   │   └── popup/         # Popup page
+│   │   ├── background/    # Background service worker
+│   │   ├── content/       # Content scripts and UI injection
+│   │   │   └── followers/ # Follower detection and removal logic
+│   │   └── popup/         # Extension popup page
 │   ├── shared/            # Shared components and utilities
+│   │   ├── hooks/         # Shared React hooks
+│   │   └── storages/      # Chrome storage abstractions
 │   ├── styles/            # Global styles and SCSS
 │   └── types/             # TypeScript type definitions
 ├── public/                # Static assets and icons
@@ -98,100 +95,111 @@ bun dev
 └── build/                 # Build output directory
 ```
 
-## 🛠️ Build & Zip Script
+## Storage
 
-This boilerplate includes a powerful `build.sh` script that automatically builds your extension and creates a versioned zip file:
+The extension uses Chrome's local storage to save:
 
-### Features
+- `realFollowers`: Array of usernames marked as legitimate followers
+- `botFollowers`: Array of usernames marked as bots
+- `preferences`: User preferences including the `hideRealOnPage` filter state
+- `lastSweepAt`: Timestamp of the last bulk removal operation
 
-- **Automatic Package Manager Detection** - Uses Bun if available, falls back to npm
-- **Version Extraction** - Pulls version from package.json automatically
-- **One-Command Build & Zip** - Build and package in a single step
-- **Timestamped Archives** - Creates uniquely named zip files
-- **Clean Build Process** - Removes old build artifacts
+Your data never leaves your browser and is stored locally. If Chrome sync is enabled, classifications will sync across your devices.
 
-### Usage
+## Privacy
+
+- **No External Servers**: No data is sent to external servers
+- **Local Processing**: All processing happens locally in your browser
+- **Explicit Actions Only**: Only interacts with X/Twitter when you explicitly trigger bot removal
+- **No Tracking**: The extension does not track your activity or collect analytics
+
+## Technical Details
+
+### Detection & Injection
+
+- Uses `data-testid="UserCell"` selector to identify follower elements on X/Twitter
+- Injects custom buttons using `MutationObserver` to handle dynamically loaded content
+- Automatically processes new followers as they scroll into view
+
+### Removal Process
+
+- Looks for "More" button (`aria-label="More"`) on each follower cell
+- Finds "Remove this follower" menu item text
+- Clicks through the removal confirmation dialog
+- Implements configurable delays (default: 1800ms) between removals to respect rate limits
+- Provides real-time progress updates during bulk removal
+
+### UI Features
+
+- **Control Panel**: Floating panel that appears on follower pages
+- **Status Indicators**: Visual highlighting (green for real, red for bots)
+- **Metrics Dashboard**: Shows trusted count, flagged count, and coverage percentage
+- **Progress Tracking**: Real-time progress bar during bulk removal operations
+
+### Browser Compatibility
+
+- **Chrome/Chromium**: Fully supported (Manifest V3)
+- **Firefox**: Build available with `bun build:firefox` (requires Manifest V2 conversion)
+
+## Build & Deployment
+
+### Automated Build Script
+
+The project includes a `build.sh` script that automatically builds and packages the extension:
 
 ```bash
-# Build and create versioned zip file automatically
 bash build.sh
 ```
 
-This single command will:
-
+This will:
 1. Detect and use the appropriate package manager (Bun or npm)
-2. Install dependencies if node_modules is missing
-3. Extract version from package.json
+2. Install dependencies if needed
+3. Extract version from `package.json`
 4. Build the extension for production
 5. Create a timestamped zip file: `build-[version]-[date].zip`
-6. Clean up the build directory
-
-### Example Output
-
-```
-build-0.0.1-2025-01-16_143052.zip
-```
 
 ### Requirements
 
-- `jq` for JSON parsing (`brew install jq`)
+- `jq` for JSON parsing (`brew install jq` on macOS)
 - Zip utility (built-in on macOS/Linux)
 - Bun or npm
 
-### What Makes This Special
+## Troubleshooting
 
-Unlike other boilerplates, our build script:
+### Extension Not Working
 
-- ✅ **One-command deployment** - No manual zipping required
-- ✅ **Smart dependency management** - Auto-installs if needed
-- ✅ **Cross-platform compatibility** - Works on macOS, Linux, and Windows (WSL)
-- ✅ **Version-aware** - Uses your package.json version in filenames
-- ✅ **Clean output** - No leftover files after zipping
+1. Ensure you're on a followers page (`https://x.com/[username]/followers`)
+2. Check that the extension is enabled in `chrome://extensions`
+3. Refresh the X/Twitter page after installing the extension
+4. Check the browser console for any error messages
 
-## 🏗️ Building for Production
+### Buttons Not Appearing
 
-1. Build the extension:
+- The extension only works on follower pages
+- Make sure you're logged into X/Twitter
+- Try scrolling down to load more followers (buttons are injected dynamically)
 
-```bash
-bun build
-```
+### Removal Not Working
 
-2. Load the extension:
-   - Open Chrome/Firefox
-   - Navigate to extensions page (`chrome://extensions` or `about:debugging`)
-   - Enable "Developer mode"
-   - Click "Load unpacked" and select the `build` directory
+- Ensure you've marked accounts as "Bot" first
+- Check that you have permission to remove followers from your account
+- The extension respects X/Twitter's rate limits - if removals fail, wait a few minutes and try again
 
-## 🔧 Configuration
+## Disclaimer
 
-### Manifest Configuration
+This extension automates interactions with X/Twitter's interface. Use responsibly and in accordance with X/Twitter's Terms of Service. The authors are not responsible for any account restrictions that may result from using this tool.
 
-Modify `manifest.js` to customize extension settings:
+**Important Notes:**
+- Always review accounts before marking them as bots
+- The extension only removes accounts you explicitly mark
+- Bulk removal operations cannot be undone
+- Use at your own risk
 
-- Permissions
-- Icons
-- Content Scripts
-- Background Scripts
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## ⚠️ Disclaimer
-
-This boilerplate is inspired by and references code from [Jonghakseo/chrome-extension-boilerplate-react-vite](https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite). While we've adapted and simplified the original template for our specific needs, we acknowledge that some concepts, configurations, and code structures are derived from this excellent open-source project.
-
-**Important**: This is not an official fork or derivative work. We've created our own implementation while learning from the original repository's architecture and best practices. All credit for the original innovative concepts goes to the original authors.
-
-## 📝 License
+## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 ### Core Technologies
 
@@ -199,14 +207,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [React](https://reactjs.org/) - A JavaScript library for building user interfaces
 - [TypeScript](https://www.typescriptlang.org/) - JavaScript with syntax for types
 - [TailwindCSS](https://tailwindcss.com/) - A utility-first CSS framework
-- [Chrome Extensions Documentation](https://developer.chrome.com/docs/extensions/)
-
-### Inspiration & Learning Resources
-
-- [Jonghakseo/chrome-extension-boilerplate-react-vite](https://github.com/Jonghakseo/chrome-extension-boilerplate-react-vite) - Original boilerplate that inspired this project
 - [Framer Motion](https://www.framer.com/motion/) - Production-ready motion library
-- [Iconsax](https://iconsax.io/) - Beautiful icon library
+- [Iconsax React](https://iconsax.io/) - Beautiful icon library
 
-### Special Thanks
+### Inspiration
 
-Special thanks to the original chrome-extension-boilerplate-react-vite project for pioneering modern extension development practices and providing excellent architectural patterns that we've adapted and simplified for this minimalist template.
+This project was inspired by the need for better follower management tools on X/Twitter. Built with modern web technologies for a smooth user experience.

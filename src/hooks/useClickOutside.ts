@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 
 /**
- * Click outside hook'u - Extension'ın root elementinin dışına tıklandığında kapatır
- * Sadece content UI için çalışır, popup için çalışmaz
+ * Click outside hook - Closes the extension when clicking outside the root element
+ * Only works for content UI, not for popup
  */
 export function useClickOutside(
   isPopup: boolean,
@@ -16,13 +16,13 @@ export function useClickOutside(
     const handleClickOutside = (event: MouseEvent) => {
       if (event.button !== 0) return;
 
-      // Extension'ın root elementini bul
+      // Find the extension's root element
       const extensionRoot = document.getElementById(
         extensionId + '-content-view-root',
       );
       if (!extensionRoot || !isRootVisible) return;
 
-      // Extension root'unun dışına tıklandıysa kapat
+      // Close if clicked outside the extension root
       if (!extensionRoot.contains(event.target as Node)) {
         toggleRootVisibility();
       }

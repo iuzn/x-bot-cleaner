@@ -1,6 +1,6 @@
 import type { Config } from 'tailwindcss';
 
-const APP_NAME = 'eb';
+const APP_NAME = 'xbc';
 
 function withOpacityValue(variable: string) {
   return ({ opacityValue }: { opacityValue?: number }) => {

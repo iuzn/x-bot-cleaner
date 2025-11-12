@@ -4,21 +4,21 @@
 @tailwind utilities;
 
 //Important Note: If you change this, you need to change the extensionId in the config.ts file
-$extensionId: 'eb';
+$extensionId: 'xbc';
 
 @layer base {
   ##{$extensionId}-app {
-    --tw-color-#{$extensionId}-50: 247 254 231;
-    --tw-color-#{$extensionId}-100: 237 253 202;
-    --tw-color-#{$extensionId}-200: 220 251 155;
-    --tw-color-#{$extensionId}-300: 187 244 81;
-    --tw-color-#{$extensionId}-400: 167 234 49;
-    --tw-color-#{$extensionId}-500: 136 208 18;
-    --tw-color-#{$extensionId}-600: 105 166 10;
-    --tw-color-#{$extensionId}-700: 79 126 13;
-    --tw-color-#{$extensionId}-800: 64 100 16;
-    --tw-color-#{$extensionId}-900: 55 84 19;
-    --tw-color-#{$extensionId}-950: 27 47 4;
+    --tw-color-#{$extensionId}-50: 239 246 255;
+    --tw-color-#{$extensionId}-100: 219 234 254;
+    --tw-color-#{$extensionId}-200: 191 219 254;
+    --tw-color-#{$extensionId}-300: 147 197 253;
+    --tw-color-#{$extensionId}-400: 96 165 250;
+    --tw-color-#{$extensionId}-500: 59 130 246;
+    --tw-color-#{$extensionId}-600: 37 99 235;
+    --tw-color-#{$extensionId}-700: 29 78 216;
+    --tw-color-#{$extensionId}-800: 30 64 175;
+    --tw-color-#{$extensionId}-900: 30 58 138;
+    --tw-color-#{$extensionId}-950: 23 37 84;
 
     --color-#{$extensionId}-50: rgb(var(--tw-color-#{$extensionId}-50));
     --color-#{$extensionId}-100: rgb(var(--tw-color-#{$extensionId}-100));
@@ -65,7 +65,7 @@ $extensionId: 'eb';
 
   a,
   button {
-    @apply focus-visible:ring-w-200 ring-offset-50 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring focus-visible:ring-offset-2 focus-visible:drop-shadow-none;
+    @apply focus-visible:ring-blue-200 ring-offset-50 focus-visible:shadow-none focus-visible:outline-none focus-visible:ring focus-visible:ring-offset-2 focus-visible:drop-shadow-none;
   }
   ::-webkit-scrollbar {
     width: 6px;
@@ -83,7 +83,6 @@ $extensionId: 'eb';
     'bg', 'text', 'fill', 'stroke', 'divide', 'ring-offset', 'decoration';
   $colors: (
     'neutral': '',
-    '#{$extensionId}': 'w-',
     'rose': 'rd-',
     'emerald': 'gn-',
   );

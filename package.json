@@ -1,7 +1,7 @@
 {
-  "name": "extension-boilerplate",
+  "name": "x-bot-cleaner",
   "version": "0.0.1",
-  "description": "This is a boilerplate for building a browser extension with Vite, React, and TypeScript.",
+  "description": "A Chrome extension to manually identify and bulk remove bot followers from your X (Twitter) account while preserving legitimate followers.",
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "build:dev": "vite build",

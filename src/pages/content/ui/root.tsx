@@ -12,7 +12,7 @@ root.id = extensionId + '-content-view-root';
 // root.style.all = 'initial';
 root.style.fontSize = '16px';
 root.style.display = 'block';
-root.style.visibility = 'hidden';
+root.style.visibility = 'visible';
 document.body.append(root);
 
 const rootIntoShadow = document.createElement('div');

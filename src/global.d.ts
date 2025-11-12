@@ -1,3 +1,5 @@
+import type { BulkRemovalResult } from '@/types/followers';
+
 declare module 'virtual:reload-on-update-in-background-script' {
   export const reloadOnUpdate: (watchPath: string) => void;
   export default reloadOnUpdate;
@@ -28,4 +30,11 @@ declare module '*.png' {
 declare module '*.json' {
   const content: string;
   export default content;
+}
+
+declare global {
+  interface Window {
+    toggleBots?: () => Promise<boolean>;
+    removeAllBots?: () => Promise<BulkRemovalResult>;
+  }
 }

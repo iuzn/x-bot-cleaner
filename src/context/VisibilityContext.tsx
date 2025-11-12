@@ -23,7 +23,7 @@ export function VisibilityProvider({
 
     setIsRootVisible(newState);
     if (root) {
-      root.style.visibility = newState ? 'visible' : 'hidden';
+      root.dataset.panelVisible = String(newState);
     }
   };
 
