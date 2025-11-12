@@ -5,6 +5,8 @@ import {
   useRef,
   useState,
   ReactElement,
+  SVGProps,
+  useId,
 } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -44,8 +46,8 @@ import type {
 } from '@/types/followers';
 import EarTag from '@/components/views/shared/EarTag';
 import { ClearDataDialog } from '@/components/views/modals/ClearDataDialog';
+import { RemoveBotsDialog } from '@/components/views/modals/RemoveBotsDialog';
 import { Switch } from '@/components/ui/switch';
-import { X } from 'lucide-react';
 
 type RemovalState = 'idle' | 'running' | 'done';
 type TabId = 'insights' | 'lists';
@@ -103,6 +105,15 @@ export default function Main() {
   const [isClearingData, setIsClearingData] = useState(false);
   const [isBotSwipeOpen, setIsBotSwipeOpen] = useState(false);
   const [isClearDataDialogOpen, setIsClearDataDialogOpen] = useState(false);
+  const [isRemoveBotsDialogOpen, setIsRemoveBotsDialogOpen] = useState(false);
+  const [isPanelMenuOpen, setIsPanelMenuOpen] = useState(false);
+  const panelMenuRef = useRef<HTMLDivElement | null>(null);
+  const panelMenuId = useId();
+  const closePanelMenu = useCallback(() => setIsPanelMenuOpen(false), []);
+  const togglePanelMenu = useCallback(
+    () => setIsPanelMenuOpen((previous) => !previous),
+    [],
+  );
   // TODO: Persist `activeTab` to storage so we can restore the last selected
   //       view after reloads, matching the requested behavior.
 
@@ -230,6 +241,55 @@ export default function Main() {
     setIsClearDataDialogOpen(true);
   };
 
+  const hasSavedData = (snapshot.totalCaptured ?? 0) > 0;
+  const handleRemoveBotsDialogToggle = (next: boolean) => {
+    if (removalState === 'running') return;
+    setIsRemoveBotsDialogOpen(next);
+  };
+  const openRemoveBotsDialog = () => {
+    if (removalState === 'running' || botCount === 0) return;
+    setIsRemoveBotsDialogOpen(true);
+  };
+
+  useEffect(() => {
+    if (!isPanelMenuOpen) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const targetNode = event.target;
+      if (
+        targetNode instanceof Node &&
+        panelMenuRef.current?.contains(targetNode)
+      ) {
+        return;
+      }
+      closePanelMenu();
+    };
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        closePanelMenu();
+      }
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, [isPanelMenuOpen, closePanelMenu]);
+
+  useEffect(() => {
+    if (!isRootVisible) {
+      closePanelMenu();
+    }
+  }, [isRootVisible, closePanelMenu]);
+
+  const confirmRemoveBots = async () => {
+    if (removalState === 'running') return;
+    setIsRemoveBotsDialogOpen(false);
+    await handleBulkRemoval();
+  };
+
   const handleToggleVisibility = async () => {
     if (isTogglingVisibility || !metrics.isFollowersPage) return;
     setIsTogglingVisibility(true);
@@ -262,11 +322,6 @@ export default function Main() {
     if (removalState === 'running' || botCount === 0) {
       return;
     }
-
-    const confirmed = window.confirm(
-      `${botCount} flagged followers will be removed. Continue?`,
-    );
-    if (!confirmed) return;
 
     setErrorMessage(null);
 
@@ -429,13 +484,79 @@ export default function Main() {
                 </p>
               </div>
               {!isPopup && (
-                <button
-                  onClick={() => toggleRootVisibility(false)}
-                  className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 dark:border-white/20 dark:bg-neutral-800/80 dark:text-white dark:hover:bg-neutral-700/90"
+                <div
+                  className="relative"
+                  ref={panelMenuRef}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onTouchStart={(event) => event.stopPropagation()}
                 >
-                  <span className="sr-only">Close panel</span>
-                  <X className="h-4 w-4" aria-hidden="true" />
-                </button>
+                  <motion.button
+                    type="button"
+                    aria-haspopup="menu"
+                    aria-expanded={isPanelMenuOpen}
+                    aria-controls={panelMenuId}
+                    onClick={togglePanelMenu}
+                    whileTap={{ scale: 0.95 }}
+                    className={cn(
+                      'inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 dark:border-white/20 dark:bg-neutral-800/80 dark:text-white',
+                      isPanelMenuOpen
+                        ? 'shadow-[0_20px_45px_rgba(15,23,42,0.18)]'
+                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/90',
+                    )}
+                  >
+                    <span className="sr-only">Open menu</span>
+                    <HamburgerIcon className="h-5 w-5" aria-hidden="true" />
+                  </motion.button>
+                  <AnimatePresence>
+                    {isPanelMenuOpen && (
+                      <motion.div
+                        id={panelMenuId}
+                        role="menu"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onTouchStart={(event) => event.stopPropagation()}
+                        initial={{ opacity: 0, y: -6, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                        className="z-[2147483647] absolute right-0 top-12 w-64 origin-top-right rounded-2xl border border-neutral-200/80 bg-white/95 p-2 shadow-2xl backdrop-blur-2xl dark:border-white/15 dark:bg-neutral-900/95"
+                      >
+                        <div className="flex flex-col gap-1">
+                          <motion.button
+                            type="button"
+                            role="menuitem"
+                            layout
+                            disabled={!hasSavedData || isClearingData}
+                            onClick={() => {
+                              closePanelMenu();
+                              promptClearDataDialog();
+                            }}
+                            className={cn(
+                              'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-rose-50/80 hover:text-rose-600 dark:text-neutral-100 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
+                              (!hasSavedData || isClearingData) &&
+                                'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-current',
+                            )}
+                          >
+                            <DeleteIcon className="h-5 w-5" aria-hidden="true" />
+                            <span>Clear saved data</span>
+                          </motion.button>
+                          <motion.button
+                            type="button"
+                            role="menuitem"
+                            layout
+                            onClick={() => {
+                              toggleRootVisibility(false);
+                              closePanelMenu();
+                            }}
+                            className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-neutral-100/80 dark:text-neutral-100 dark:hover:bg-neutral-800/70"
+                          >
+                            <HideIcon className="h-5 w-5" aria-hidden="true" />
+                            <span>Hide panel</span>
+                          </motion.button>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               )}
             </div>
 
@@ -467,7 +588,7 @@ export default function Main() {
               {activeTab === 'insights' ? (
                 <InsightsSection
                   stats={stats}
-                  onRemoveBots={handleBulkRemoval}
+                  onRemoveBots={openRemoveBotsDialog}
                   removalState={removalState}
                   botCount={botCount}
                   actionDisabled={actionDisabled}
@@ -477,8 +598,6 @@ export default function Main() {
                   snapshot={snapshot}
                   classification={classification}
                   followerTarget={metrics.profileFollowerCount}
-                  onResetAll={promptClearDataDialog}
-                  isClearingData={isClearingData}
                 />
               )}
             </div>
@@ -506,6 +625,13 @@ export default function Main() {
               onClose={closeBotSwipe}
               onDecision={handleSwipeDecision}
               onUndo={handleUndoSwipeDecision}
+            />
+            <RemoveBotsDialog
+              open={isRemoveBotsDialogOpen}
+              onOpenChange={handleRemoveBotsDialogToggle}
+              onConfirm={confirmRemoveBots}
+              botCount={botCount}
+              isRemoving={removalState === 'running'}
             />
             <ClearDataDialog
               open={isClearDataDialogOpen}
@@ -1242,13 +1368,13 @@ function RemoveBotsCard({
       onClick={onRemoveBots}
       disabled={disabled}
       className={cn(
-        'relative rounded-[28px] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
+        'relative rounded-[28px] border px-4 pb-4 pt-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
         cardTone,
         disabled && 'cursor-not-allowed opacity-80',
         navigationOnly && 'opacity-90',
       )}
     >
-      <div className="flex h-full flex-col items-start justify-center gap-2">
+      <div className="flex h-full flex-col items-start">
         <p className="text-2xl font-semibold tracking-tight">
           {isRunning ? 'Removing…' : 'Remove Bots'}
         </p>
@@ -1264,14 +1390,10 @@ function ListsSection({
   snapshot,
   classification,
   followerTarget,
-  onResetAll,
-  isClearingData,
 }: {
   snapshot: FollowerSnapshotState;
   classification: FollowerClassificationState;
   followerTarget: number | null;
-  onResetAll: () => void;
-  isClearingData: boolean;
 }) {
   const [filter, setFilter] = useState<ScrapedFilter>('all');
   const [activeReviewUsername, setActiveReviewUsername] = useState<
@@ -1413,20 +1535,6 @@ function ListsSection({
               />
             ))}
           </div>
-        </div>
-        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto whitespace-nowrap rounded-full border border-neutral-200/80 bg-white/95 px-1 py-1 [-ms-overflow-style:none] [scrollbar-width:none] dark:border-white/10 dark:bg-neutral-900/60 [&::-webkit-scrollbar]:hidden">
-          <button
-            type="button"
-            onClick={onResetAll}
-            disabled={isClearingData || scrapedCount === 0}
-            className={cn(
-              'rounded-full border border-neutral-300 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.3em] text-neutral-600 transition hover:border-neutral-500 hover:text-neutral-800 dark:border-white/20 dark:text-neutral-300 dark:hover:border-white/40 dark:hover:text-white',
-              (isClearingData || scrapedCount === 0) &&
-                'cursor-not-allowed opacity-50',
-            )}
-          >
-            {isClearingData ? 'Clearing…' : 'Clear saved data'}
-          </button>
         </div>
       </div>
 
@@ -1802,13 +1910,13 @@ function getStatusFromSets(
 
 function getHighResAvatarUrl(url?: string) {
   if (!url) return undefined;
-  // _bigger ifadesini kaldır
+  // Remove _bigger suffix
   if (url.includes('_bigger')) {
     url = url.replace('_bigger', '');
   }
-  // _mini, _small gibi boyut ifadelerini kaldır
+  // Remove size expressions like _mini, _small
   url = url.replace(/_mini|_small/g, '');
-  // _x96, _x48 gibi boyut ifadelerini kaldır
+  // Remove size expressions like _x96, _x48
   url = url.replace(/_x\d+/g, '');
   if (url.includes('_normal')) {
     return url.replace('_normal', '_400x400');
@@ -1968,6 +2076,57 @@ function FloatingActions({
         </div>
       )}
     </div>
+  );
+}
+
+function HamburgerIcon({
+  className,
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      {...props}
+    >
+      <path d="M3 4H21V6H3V4ZM3 11H21V13H3V11ZM3 18H21V20H3V18Z" />
+    </svg>
+  );
+}
+
+function DeleteIcon({
+  className,
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      {...props}
+    >
+      <path d="M17 6H22V8H20V21C20 21.5523 19.5523 22 19 22H5C4.44772 22 4 21.5523 4 21V8H2V6H7V3C7 2.44772 7.44772 2 8 2H16C16.5523 2 17 2.44772 17 3V6ZM18 8H6V20H18V8ZM9 11H11V17H9V11ZM13 11H15V17H13V11ZM9 4V6H15V4H9Z" />
+    </svg>
+  );
+}
+
+function HideIcon({
+  className,
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+      {...props}
+    >
+      <path d="M17.8827 19.2968C16.1814 20.3755 14.1638 21.0002 12.0003 21.0002C6.60812 21.0002 2.12215 17.1204 1.18164 12.0002C1.61832 9.62282 2.81932 7.5129 4.52047 5.93457L1.39366 2.80777L2.80788 1.39355L22.6069 21.1925L21.1927 22.6068L17.8827 19.2968ZM5.9356 7.3497C4.60673 8.56015 3.6378 10.1672 3.22278 12.0002C4.14022 16.0521 7.7646 19.0002 12.0003 19.0002C13.5997 19.0002 15.112 18.5798 16.4243 17.8384L14.396 15.8101C13.7023 16.2472 12.8808 16.5002 12.0003 16.5002C9.51498 16.5002 7.50026 14.4854 7.50026 12.0002C7.50026 11.1196 7.75317 10.2981 8.19031 9.60442L5.9356 7.3497ZM12.9139 14.328L9.67246 11.0866C9.5613 11.3696 9.50026 11.6777 9.50026 12.0002C9.50026 13.3809 10.6196 14.5002 12.0003 14.5002C12.3227 14.5002 12.6309 14.4391 12.9139 14.328ZM20.8068 16.5925L19.376 15.1617C20.0319 14.2268 20.5154 13.1586 20.7777 12.0002C19.8603 7.94818 16.2359 5.00016 12.0003 5.00016C11.1544 5.00016 10.3329 5.11773 9.55249 5.33818L7.97446 3.76015C9.22127 3.26959 10.5793 3.00016 12.0003 3.00016C17.3924 3.00016 21.8784 6.87992 22.8189 12.0002C22.5067 13.6998 21.8038 15.2628 20.8068 16.5925ZM11.7229 7.50857C11.8146 7.50299 11.9071 7.50016 12.0003 7.50016C14.4855 7.50016 16.5003 9.51488 16.5003 12.0002C16.5003 12.0933 16.4974 12.1858 16.4919 12.2775L11.7229 7.50857Z" />
+    </svg>
   );
 }
 

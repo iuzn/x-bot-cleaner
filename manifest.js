@@ -13,7 +13,7 @@ const manifest = {
   version: packageJson.version,
   description: '__MSG_extensionDescription__',
   //Update permissions when needed
-  permissions: ['storage', 'activeTab'],
+  permissions: ['storage', 'activeTab', 'webNavigation', 'tabs'],
   background: {
     service_worker: 'src/pages/background/index.js',
     type: 'module',

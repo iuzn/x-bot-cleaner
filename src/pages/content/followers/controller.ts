@@ -99,10 +99,20 @@ let activeScrapeOptions: Required<StartScrapeOptions> = {
   ...DEFAULT_SCRAPE_OPTIONS,
 };
 let autoRemovalInFlight = false;
+let routeChangeDebounceTimer: number | null = null;
 
 export function initFollowerController() {
-  if (initialized || typeof window === 'undefined') return;
+  // console.log('[X Bot Cleaner - Controller] 🎬 initFollowerController called');
+  // console.log('[X Bot Cleaner - Controller] 📍 Initialized:', initialized);
+  // console.log('[X Bot Cleaner - Controller] 🌍 Window defined:', typeof window !== 'undefined');
+
+  if (initialized || typeof window === 'undefined') {
+    // console.log('[X Bot Cleaner - Controller] ⚠️ Already initialized or window undefined, skipping');
+    return;
+  }
+
   initialized = true;
+  // console.log('[X Bot Cleaner - Controller] ✅ Controller initialization started');
 
   followerClassificationStorage
     .get()
@@ -130,7 +140,7 @@ export function initFollowerController() {
       lastSnapshotCount = cachedSnapshotState.totalCaptured;
       if (isFollowersPageActive()) {
         scheduleMetricsUpdate();
-        // İlk yüklemede de auto capture kontrolü yap
+        // Also check for auto capture on initial load
         void checkAndStartAutoCapture();
       }
     })
@@ -162,11 +172,66 @@ export function initFollowerController() {
   document.addEventListener('click', handleDelegatedAction, true);
   window.addEventListener('locationchange', handleRouteChange);
   window.addEventListener('popstate', handleRouteChange);
+  // console.log('[X Bot Cleaner - Controller] 👂 Event listeners registered');
 
+  // console.log('[X Bot Cleaner - Controller] 🎬 Triggering initial route change...');
   handleRouteChange();
 
   window.toggleBots = () => toggleRealVisibility();
   window.removeAllBots = () => removeAllBotsFromPage();
+
+  // console.log('[X Bot Cleaner - Controller] 🎉 Controller initialization complete!');
+}
+
+/**
+ * Public API to trigger route changes from Chrome Extension messages
+ * This function is called by the content script entry point
+ */
+export function handleChromeRouteChange(url: string, method: string) {
+  // console.log('[X Bot Cleaner - Controller] 📥 handleChromeRouteChange called:', {
+  //   url,
+  //   method,
+  //   currentUrl: typeof window !== 'undefined' ? window.location.href : 'undefined',
+  // });
+
+  if (typeof window === 'undefined') {
+    console.warn(
+      '[X Bot Cleaner - Controller] Window is undefined, skipping route change',
+    );
+    return;
+  }
+
+  const currentUrl = window.location.href;
+
+  // console.log('[X Bot Cleaner - Controller] 🔍 URL Check:', {
+  //   receivedUrl: url,
+  //   currentUrl,
+  //   areEqual: url === currentUrl,
+  // });
+
+  // Process even if URL is the same when Chrome route change message arrives
+  // Because DOM or state might have changed (SPA navigation, pushState, etc.)
+  // console.log(`[X Bot Cleaner - Controller] 🔄 Processing route change via ${method}: ${url}`);
+
+  // Debounce: If multiple events arrive simultaneously (tabUpdated + historyStateUpdated)
+  // only process the last one
+  if (routeChangeDebounceTimer !== null) {
+    // console.log('[X Bot Cleaner - Controller] ⏸️ Clearing previous debounce timer');
+    window.clearTimeout(routeChangeDebounceTimer);
+  }
+
+  // Call handleRouteChange with a short delay
+  // This allows the browser to fully update the DOM and URL
+  // console.log('[X Bot Cleaner - Controller] ⏳ Scheduling handleRouteChange in 200ms (debounced)...');
+
+  routeChangeDebounceTimer = window.setTimeout(() => {
+    routeChangeDebounceTimer = null;
+    // console.log('[X Bot Cleaner - Controller] 🎬 Executing handleRouteChange (after debounce)...');
+    // console.log('[X Bot Cleaner - Controller] 📍 Current URL at execution:', window.location.href);
+    // console.log('[X Bot Cleaner - Controller] 📍 Current pathname:', window.location.pathname);
+    handleRouteChange();
+    // console.log('[X Bot Cleaner - Controller] ✅ handleRouteChange executed');
+  }, 200);
 }
 
 export async function toggleRealVisibility(force?: boolean) {
@@ -369,7 +434,12 @@ export async function removeAllBotsFromPage(
 }
 
 function handleRouteChange() {
+  // console.log('[X Bot Cleaner - Controller] 🔄 handleRouteChange triggered');
+  // console.log('[X Bot Cleaner - Controller] 📍 Current pathname:', window.location.pathname);
+  // console.log('[X Bot Cleaner - Controller] 🔍 Is followers page active:', isFollowersPageActive());
+
   if (!isFollowersPageActive()) {
+    // console.log('[X Bot Cleaner - Controller] ⚠️ Not on followers page, tearing down...');
     teardownObserver();
     stopFollowerScrape('error', 'Followers page closed');
     followerMetricsStore.update({
@@ -384,9 +454,11 @@ function handleRouteChange() {
       profileFollowerCount: null,
       scrapeStatus,
     });
+    // console.log('[X Bot Cleaner - Controller] ✅ Teardown complete');
     return;
   }
 
+  // console.log('[X Bot Cleaner - Controller] ✅ On followers page, initializing...');
   ensureButtonStyles();
   processFollowers();
   applyRealVisibilityToCells();
@@ -394,9 +466,11 @@ function handleRouteChange() {
   startObserver();
   scheduleMetricsUpdate();
 
-  // Followers sayfası yüklendiğinde otomatik eylem flag'lerini kontrol et
+  // Check automatic action flags when followers page loads
+  // console.log('[X Bot Cleaner - Controller] 🔍 Checking auto actions...');
   void checkAndStartAutoCapture();
   void checkAndStartAutoRemoval();
+  // console.log('[X Bot Cleaner - Controller] ✅ Route change handling complete');
 }
 
 function startObserver() {
@@ -431,7 +505,7 @@ function scheduleProcessFollowers() {
 
 function processFollowers() {
   if (!isFollowersPageActive()) return;
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri işle
+  // Only process cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -599,13 +673,13 @@ function extractAvatarUrl(cell: Element): string | undefined {
   );
   if (!img?.src) return undefined;
   let url = img.src;
-  // _bigger ifadesini kaldır
+  // Remove _bigger suffix
   if (url.includes('_bigger')) {
     url = url.replace('_bigger', '');
   }
-  // _mini, _small gibi boyut ifadelerini kaldır
+  // Remove size expressions like _mini, _small
   url = url.replace(/_mini|_small/g, '');
-  // _x96, _x48 gibi boyut ifadelerini kaldır
+  // Remove size expressions like _x96, _x48
   url = url.replace(/_x\d+/g, '');
   return url;
 }
@@ -712,7 +786,7 @@ function getStatusFor(username: string): FollowerStatus {
 }
 
 function syncCellsWithState() {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri işle
+  // Only process cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -730,7 +804,7 @@ function syncCellsWithState() {
 }
 
 function applyRealVisibilityToCells() {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri işle
+  // Only process cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -759,7 +833,7 @@ function applyRealVisibilityToCells() {
 }
 
 function applyVerifiedVisibilityToCells() {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri işle
+  // Only process cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -1082,7 +1156,7 @@ function updateScrapeStatus(partial: Partial<FollowerScrapeStatus>) {
 }
 
 function getCellCount() {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri say
+  // Count cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -1091,7 +1165,7 @@ function getCellCount() {
 }
 
 function getProcessedCount() {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki işlenmiş hücreleri say
+  // Count processed cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -1100,7 +1174,7 @@ function getProcessedCount() {
 }
 
 function getStatusCount(status: Exclude<FollowerStatus, 'unknown'>) {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içindeki hücreleri say
+  // Count cells inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -1430,7 +1504,7 @@ async function attemptRemoval(
 }
 
 function findCellByUsername(username: string) {
-  // Sadece "Timeline: Followers" aria-label'ına sahip elementin içinde ara
+  // Search inside the element with "Timeline: Followers" aria-label
   const timelineContainer = document.querySelector<HTMLElement>(
     '[aria-label="Timeline: Followers"]',
   );
@@ -1483,24 +1557,24 @@ function sleep(duration: number) {
 }
 
 async function checkAndStartAutoCapture() {
-  // Eğer zaten capture çalışıyorsa, bir şey yapma
+  // If capture is already running, do nothing
   if (scrapeStatus.phase === 'running') {
     return;
   }
 
-  // Storage'dan flag'i kontrol et
+  // Check flag from storage
   const snapshot = await followerSnapshotStorage.get();
   if (!snapshot?.autoStartCapture) {
     return;
   }
 
-  // Flag'i temizle
+  // Clear the flag
   await followerSnapshotStorage.clearAutoStartCapture();
 
-  // Kısa bir gecikme ekle ki sayfa tamamen yüklensin
+  // Add a short delay so the page loads completely
   await sleep(500);
 
-  // Capture başlat
+  // Start capture
   try {
     await startFollowerScrape();
   } catch (error) {
