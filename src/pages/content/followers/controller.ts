@@ -54,6 +54,8 @@ const DEFAULT_SCRAPE_OPTIONS = {
 } as const;
 const FOLLOWERS_NAVIGATION_TIMEOUT = 15_000;
 const FOLLOWERS_NAVIGATION_POLL_INTERVAL = 300;
+const REMOVAL_SCROLL_DELAY_MS = 900;
+const REMOVAL_SCROLL_MAX_ATTEMPTS = 80;
 const RESERVED_ROOT_ROUTES = new Set([
   '',
   'home',
@@ -335,7 +337,13 @@ export async function removeAllBotsFromPage(
     await sleep(mergedOptions.delayMs);
   }
 
-  await followerClassificationStorage.clearBots();
+  await followerClassificationStorage.set((current) => {
+    const state = ensureState(current);
+    return {
+      ...state,
+      botFollowers: Array.from(botSet),
+    };
+  });
   await followerClassificationStorage.updateLastSweep(Date.now());
 
   options?.onProgress?.({
@@ -1369,9 +1377,14 @@ async function attemptRemoval(
   const result: { status: FollowerRemovalStatus; reason?: string } = {
     status: 'skipped',
   };
-  const cell = findCellByUsername(username);
+  const cell = await findCellWithAutoScroll(username);
   if (!cell) {
     return { status: 'not-found', reason: 'User cell not found' };
+  }
+
+  if (typeof cell.scrollIntoView === 'function') {
+    cell.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    await sleep(350);
   }
 
   const moreButton = cell.querySelector<HTMLButtonElement>(
@@ -1429,6 +1442,40 @@ function findCellByUsername(username: string) {
     (cell) =>
       cell.getAttribute(USERNAME_ATTRIBUTE) === normalizeUsername(username),
   );
+}
+
+async function findCellWithAutoScroll(username: string) {
+  let cell = findCellByUsername(username);
+  if (cell) {
+    return cell;
+  }
+
+  const scroller = getFollowerScrollElement();
+  if (!scroller) {
+    return null;
+  }
+
+  let previousCount = getCellCount();
+
+  for (let attempt = 0; attempt < REMOVAL_SCROLL_MAX_ATTEMPTS; attempt++) {
+    scrollFollowersToBottom(scroller);
+    await sleep(REMOVAL_SCROLL_DELAY_MS);
+
+    cell = findCellByUsername(username);
+    if (cell) {
+      return cell;
+    }
+
+    const currentCount = getCellCount();
+    const noGrowth = currentCount <= previousCount;
+    previousCount = currentCount;
+
+    if (isScrollerNearBottom(scroller) && noGrowth) {
+      break;
+    }
+  }
+
+  return findCellByUsername(username);
 }
 
 function sleep(duration: number) {

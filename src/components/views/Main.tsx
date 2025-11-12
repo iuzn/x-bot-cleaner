@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  ReactElement,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   AnimatePresence,
@@ -36,7 +43,9 @@ import type {
   RemovalProgress,
 } from '@/types/followers';
 import EarTag from '@/components/views/shared/EarTag';
+import { ClearDataDialog } from '@/components/views/modals/ClearDataDialog';
 import { Switch } from '@/components/ui/switch';
+import { X } from 'lucide-react';
 
 type RemovalState = 'idle' | 'running' | 'done';
 type TabId = 'insights' | 'lists';
@@ -93,6 +102,7 @@ export default function Main() {
   const [hasAutoSwitched, setHasAutoSwitched] = useState(false);
   const [isClearingData, setIsClearingData] = useState(false);
   const [isBotSwipeOpen, setIsBotSwipeOpen] = useState(false);
+  const [isClearDataDialogOpen, setIsClearDataDialogOpen] = useState(false);
   // TODO: Persist `activeTab` to storage so we can restore the last selected
   //       view after reloads, matching the requested behavior.
 
@@ -210,6 +220,16 @@ export default function Main() {
     }
   }, [isBotSwipeOpen, botSwipeEntries.length]);
 
+  const handleClearDialogToggle = (next: boolean) => {
+    if (isClearingData) return;
+    setIsClearDataDialogOpen(next);
+  };
+
+  const promptClearDataDialog = () => {
+    if (snapshot.totalCaptured === 0 || isClearingData) return;
+    setIsClearDataDialogOpen(true);
+  };
+
   const handleToggleVisibility = async () => {
     if (isTogglingVisibility || !metrics.isFollowersPage) return;
     setIsTogglingVisibility(true);
@@ -239,11 +259,7 @@ export default function Main() {
   };
 
   const handleBulkRemoval = async () => {
-    if (
-      removalState === 'running' ||
-      botCount === 0 ||
-      !metrics.isFollowersPage
-    ) {
+    if (removalState === 'running' || botCount === 0) {
       return;
     }
 
@@ -252,8 +268,25 @@ export default function Main() {
     );
     if (!confirmed) return;
 
-    setRemovalState('running');
     setErrorMessage(null);
+
+    if (!metrics.isFollowersPage) {
+      try {
+        const ready = await ensureFollowersPageActive(undefined, {
+          autoStartRemoval: true,
+        });
+        if (!ready) {
+          setErrorMessage('Unable to open your followers list. Try again.');
+          return;
+        }
+      } catch (error) {
+        console.error(error);
+        setErrorMessage('Unable to open your followers list. Try again.');
+        return;
+      }
+    }
+
+    setRemovalState('running');
     setRemovalProgress({
       total: botCount,
       completed: 0,
@@ -310,11 +343,6 @@ export default function Main() {
 
   const handleResetAllData = async () => {
     if (isClearingData) return;
-    const confirmed = window.confirm(
-      'This will clear every saved follower and label. Continue?',
-    );
-    if (!confirmed) return;
-
     setIsClearingData(true);
     setErrorMessage(null);
     try {
@@ -322,6 +350,7 @@ export default function Main() {
         followerSnapshotStorage.resetSnapshot(),
         followerClassificationStorage.resetAll(),
       ]);
+      setIsClearDataDialogOpen(false);
     } catch (error) {
       console.error(error);
       setErrorMessage('Unable to clear saved data.');
@@ -402,9 +431,10 @@ export default function Main() {
               {!isPopup && (
                 <button
                   onClick={() => toggleRootVisibility(false)}
-                  className="flex h-9 w-9 items-center justify-center rounded-full border border-white/50 bg-white/40 text-neutral-600 transition hover:bg-white/70 dark:border-white/10 dark:bg-neutral-800/70 dark:text-neutral-200"
+                  className="group inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-700 transition hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 dark:border-white/20 dark:bg-neutral-800/80 dark:text-white dark:hover:bg-neutral-700/90"
                 >
-                  <span className="sr-only">Close panel</span>×
+                  <span className="sr-only">Close panel</span>
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               )}
             </div>
@@ -447,7 +477,7 @@ export default function Main() {
                   snapshot={snapshot}
                   classification={classification}
                   followerTarget={metrics.profileFollowerCount}
-                  onResetAll={handleResetAllData}
+                  onResetAll={promptClearDataDialog}
                   isClearingData={isClearingData}
                 />
               )}
@@ -476,6 +506,14 @@ export default function Main() {
               onClose={closeBotSwipe}
               onDecision={handleSwipeDecision}
               onUndo={handleUndoSwipeDecision}
+            />
+            <ClearDataDialog
+              open={isClearDataDialogOpen}
+              onOpenChange={handleClearDialogToggle}
+              onConfirm={handleResetAllData}
+              isClearing={isClearingData}
+              capturedCount={snapshot.totalCaptured ?? 0}
+              classifiedCount={realCount + botCount}
             />
           </div>
         </div>
@@ -1185,11 +1223,16 @@ function RemoveBotsCard({
 }) {
   const hasBots = botCount > 0;
   const isRunning = removalState === 'running';
-  const disabled = actionDisabled || isRunning || botCount === 0;
+  const disabled = isRunning || botCount === 0;
+  const navigationOnly = !disabled && actionDisabled;
   const cardTone =
     hasBots || isRunning
       ? 'border-rose-200/80 bg-rose-50 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100'
       : 'border-rose-500/80 bg-rose-500 text-white dark:border-rose-500/60 dark:bg-rose-500/80';
+  const iconColor =
+    hasBots || isRunning
+      ? 'text-rose-600/50 dark:text-rose-100/50'
+      : 'text-white/50';
 
   return (
     <motion.button
@@ -1199,17 +1242,20 @@ function RemoveBotsCard({
       onClick={onRemoveBots}
       disabled={disabled}
       className={cn(
-        'rounded-[28px] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
+        'relative rounded-[28px] border px-4 py-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
         cardTone,
         disabled && 'cursor-not-allowed opacity-80',
-        !disabled && 'hover:-translate-y-0.5 hover:shadow-lg',
+        navigationOnly && 'opacity-90',
       )}
     >
-      <div className="flex h-full items-start justify-center">
+      <div className="flex h-full flex-col items-start justify-center gap-2">
         <p className="text-2xl font-semibold tracking-tight">
           {isRunning ? 'Removing…' : 'Remove Bots'}
         </p>
       </div>
+      <BotSwipeIcon
+        className={cn('w-142 absolute bottom-1.5 right-3 h-14', iconColor)}
+      />
     </motion.button>
   );
 }
@@ -1228,6 +1274,12 @@ function ListsSection({
   isClearingData: boolean;
 }) {
   const [filter, setFilter] = useState<ScrapedFilter>('all');
+  const [activeReviewUsername, setActiveReviewUsername] = useState<
+    string | null
+  >(null);
+  const [transientStatuses, setTransientStatuses] = useState<
+    Partial<Record<string, FollowerStatus>>
+  >({});
   const realSet = useMemo(
     () => new Set(classification.realFollowers),
     [classification.realFollowers],
@@ -1242,6 +1294,19 @@ function ListsSection({
     );
   }, [snapshot.entries]);
 
+  const resolveStatus = useCallback(
+    (username: string): FollowerStatus => {
+      const normalized = normalizeUsername(username);
+      if (!normalized) return 'unknown';
+      const override = transientStatuses[normalized];
+      if (override === 'real' || override === 'bot') {
+        return override;
+      }
+      return getStatusFromSets(normalized, realSet, botSet);
+    },
+    [transientStatuses, realSet, botSet],
+  );
+
   const counts = useMemo(() => {
     const aggregate = {
       all: entries.length,
@@ -1250,7 +1315,7 @@ function ListsSection({
       unreviewed: 0,
     };
     entries.forEach((entry) => {
-      const status = getStatusFromSets(entry.username, realSet, botSet);
+      const status = resolveStatus(entry.username);
       if (status === 'real') {
         aggregate.trusted += 1;
       } else if (status === 'bot') {
@@ -1260,17 +1325,17 @@ function ListsSection({
       }
     });
     return aggregate;
-  }, [entries, realSet, botSet]);
+  }, [entries, resolveStatus]);
 
   const filteredEntries = useMemo(() => {
     return entries.filter((entry) => {
-      const status = getStatusFromSets(entry.username, realSet, botSet);
+      const status = resolveStatus(entry.username);
       if (filter === 'trusted') return status === 'real';
       if (filter === 'bots') return status === 'bot';
       if (filter === 'unreviewed') return status === 'unknown';
       return true;
     });
-  }, [entries, filter, realSet, botSet]);
+  }, [entries, filter, resolveStatus]);
 
   const scrapedCount = snapshot.totalCaptured;
 
@@ -1284,6 +1349,51 @@ function ListsSection({
     { id: 'bots', label: 'Bots', count: counts.bots },
     { id: 'unreviewed', label: 'Unreviewed', count: counts.unreviewed },
   ];
+
+  useEffect(() => {
+    setTransientStatuses((current) => {
+      const next = { ...current };
+      let changed = false;
+      Object.keys(next).forEach((username) => {
+        if (realSet.has(username) || botSet.has(username)) {
+          delete next[username];
+          changed = true;
+        }
+      });
+      return changed ? next : current;
+    });
+  }, [realSet, botSet]);
+
+  const toggleReview = useCallback((username: string) => {
+    const normalized = normalizeUsername(username);
+    if (!normalized) return;
+    setActiveReviewUsername((current) =>
+      current === normalized ? null : normalized,
+    );
+  }, []);
+
+  const closeReview = useCallback(() => {
+    setActiveReviewUsername(null);
+  }, []);
+
+  const classifyFromList = useCallback(
+    async (username: string, decision: 'real' | 'bot') => {
+      try {
+        const normalized = normalizeUsername(username);
+        if (!normalized) return;
+        await followerClassificationStorage.classify(normalized, decision);
+        setTransientStatuses((current) => ({
+          ...current,
+          [normalized]: decision,
+        }));
+        setActiveReviewUsername(null);
+      } catch (error) {
+        console.error('Unable to classify follower from list view.', error);
+        throw error;
+      }
+    },
+    [],
+  );
 
   return (
     <div className="space-y-4">
@@ -1329,12 +1439,21 @@ function ListsSection({
           </div>
         ) : (
           filteredEntries.map((entry) => {
-            const status = getStatusFromSets(entry.username, realSet, botSet);
+            const normalizedUsername = normalizeUsername(entry.username);
+            const reviewIdentifier =
+              normalizedUsername || entry.username || `${entry.scrapedAt}`;
+            const status = resolveStatus(entry.username);
             return (
               <ScrapedListItem
-                key={entry.username}
+                key={reviewIdentifier}
                 entry={entry}
                 status={status}
+                isReviewing={activeReviewUsername === reviewIdentifier}
+                onReviewToggle={() => toggleReview(entry.username)}
+                onReviewClose={closeReview}
+                onClassify={(decision) =>
+                  classifyFromList(entry.username, decision)
+                }
               />
             );
           })
@@ -1384,60 +1503,268 @@ function ScrapeFilterButton({
 function ScrapedListItem({
   entry,
   status,
+  isReviewing,
+  onReviewToggle,
+  onReviewClose,
+  onClassify,
 }: {
   entry: FollowerSnapshotEntry;
   status: FollowerStatus;
+  isReviewing: boolean;
+  onReviewToggle: () => void;
+  onReviewClose: () => void;
+  onClassify: (decision: 'real' | 'bot') => Promise<void>;
 }) {
   // TODO: Wire row-level taps to open the classification sheet or trigger quick
   //       actions so users can mark bots/trusted without going back to X.com.
   return (
-    <div className="flex items-center gap-3 rounded-[28px] border border-neutral-200/80 bg-white px-4 py-3 text-sm text-neutral-700 dark:border-white/10 dark:bg-neutral-900/70 dark:text-neutral-200">
-      <div className="flex flex-1 items-start gap-3">
+    <div className="relative flex items-center gap-3 rounded-[28px] border border-neutral-200/80 bg-white px-4 py-3 text-sm text-neutral-700 dark:border-white/10 dark:bg-neutral-900/70 dark:text-neutral-200">
+      <div className="flex w-full items-start gap-3">
         <ScrapedAvatar entry={entry} />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-neutral-900 dark:text-white">
-              {entry.displayName ?? `@${entry.username}`}
-            </p>
-            {entry.isVerified && (
-              <span className="inline-flex items-center justify-center rounded-full bg-blue-50 p-0.5 text-blue-500 dark:bg-white/10">
-                <VerifiedBadgeIcon className="h-3 w-3" />
-              </span>
-            )}
+        <div className="w-full">
+          <div className="flex w-full items-start justify-between gap-2">
+            <div className="flex flex-col items-start gap-2">
+              <div className="flex flex-row items-center gap-2">
+                <p className="text-sm font-semibold text-neutral-900 dark:text-white">
+                  {entry.displayName ?? `@${entry.username}`}
+                </p>
+                {entry.isVerified && (
+                  <span className="inline-flex items-center justify-center rounded-full bg-blue-50 p-0.5 text-blue-500 dark:bg-white/10">
+                    <VerifiedBadgeIcon className="h-3 w-3" />
+                  </span>
+                )}
+              </div>
+              <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
+                @{entry.username}
+              </p>
+            </div>
+
+            <ScrapedStatusBadge
+              status={status}
+              isReviewing={isReviewing}
+              onReviewToggle={onReviewToggle}
+              onReviewClose={onReviewClose}
+              onClassify={onClassify}
+            />
           </div>
-          <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
-            @{entry.username}
-          </p>
           {entry.bio && (
-            <p className="mt-1 overflow-hidden text-ellipsis text-xs text-neutral-500 [-webkit-box-orient:vertical] [-webkit-line-clamp:2] [display:-webkit-box] dark:text-neutral-300">
+            <p className="mt-1 overflow-hidden text-ellipsis text-xs text-neutral-500 [-webkit-box-orient:vertical] [-webkit-line-clamp:3] [display:-webkit-box] dark:text-neutral-300">
               {entry.bio}
             </p>
           )}
         </div>
       </div>
-      <ScrapedStatusPill status={status} />
     </div>
   );
 }
 
-function ScrapedStatusPill({ status }: { status: FollowerStatus }) {
-  const tone = {
-    real: 'border-emerald-300/60 bg-emerald-50/70 text-emerald-600 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
-    bot: 'border-rose-300/60 bg-rose-50/80 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-200',
-    unknown:
-      'border-neutral-200/80 bg-neutral-50 text-neutral-600 dark:border-white/10 dark:bg-neutral-800/70 dark:text-neutral-200',
-  } as const;
-  const label =
-    status === 'real' ? 'Trusted' : status === 'bot' ? 'Bot' : 'Review';
+function ScrapedStatusBadge({
+  status,
+  isReviewing,
+  onReviewToggle,
+  onReviewClose,
+  onClassify,
+}: {
+  status: FollowerStatus;
+  isReviewing: boolean;
+  onReviewToggle: () => void;
+  onReviewClose: () => void;
+  onClassify: (decision: 'real' | 'bot') => Promise<void>;
+}) {
   return (
-    <span
+    <ScrapedReviewActions
+      status={status}
+      isOpen={isReviewing}
+      onToggle={onReviewToggle}
+      onClose={onReviewClose}
+      onClassify={onClassify}
+    />
+  );
+}
+
+function ScrapedReviewActions({
+  status,
+  isOpen,
+  onToggle,
+  onClose,
+  onClassify,
+}: {
+  status: FollowerStatus;
+  isOpen: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onClassify: (decision: 'real' | 'bot') => Promise<void>;
+}) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      // Shadow DOM retargeting hides the real target from document listeners,
+      // so we rely on the composed path + contains fallback.
+      const target = (event.target as Node) ?? null;
+      const path =
+        typeof event.composedPath === 'function'
+          ? (event.composedPath() as EventTarget[])
+          : null;
+
+      const containsTarget = (element: HTMLElement | null) => {
+        if (!element) return false;
+        if (path?.includes(element)) return true;
+        if (target) return element.contains(target);
+        return false;
+      };
+
+      if (
+        containsTarget(menuRef.current) ||
+        containsTarget(buttonRef.current)
+      ) {
+        return;
+      }
+      onClose();
+    };
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [isOpen, onClose]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setError(null);
+      setIsSubmitting(false);
+    }
+  }, [isOpen]);
+
+  const handleDecision = async (decision: 'real' | 'bot') => {
+    if (isSubmitting) return;
+    setError(null);
+    setIsSubmitting(true);
+    try {
+      await onClassify(decision);
+    } catch (err) {
+      console.error('Unable to classify follower from inline review.', err);
+      setError('Unable to update status. Try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const isKnownStatus = status === 'real' || status === 'bot';
+
+  const triggerContent = () => {
+    if (!isKnownStatus) {
+      return 'Review';
+    }
+    const label = status === 'real' ? 'Real' : 'Bot';
+    return (
+      <span className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em]">
+        <span className="inline-flex items-center gap-2 text-neutral-700 group-hover:hidden dark:text-neutral-200">
+          {status === 'real' ? (
+            <RealSwipeIcon className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
+          ) : (
+            <BotSwipeIcon className="h-3.5 w-3.5 text-rose-600 dark:text-rose-300" />
+          )}
+          <span>{label}</span>
+        </span>
+        <span className="hidden text-neutral-700 group-hover:inline-flex dark:text-neutral-200">
+          Review
+        </span>
+      </span>
+    );
+  };
+
+  return (
+    <div className="absolute right-2.5 top-2.5 flex flex-col items-end gap-2">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={onToggle}
+        disabled={isSubmitting}
+        className={cn(
+          'group flex min-w-[96px] items-center justify-center rounded-full border border-neutral-200/80 bg-white px-3 py-1 text-center text-[10px] font-semibold uppercase tracking-[0.35em] text-neutral-600 backdrop-blur-lg transition hover:border-neutral-400 hover:text-neutral-900 dark:border-white/20 dark:bg-neutral-900/70 dark:text-neutral-200 dark:hover:text-white',
+          isOpen && 'border-neutral-400 dark:border-white/40',
+          isSubmitting && 'cursor-not-allowed opacity-50',
+        )}
+      >
+        {triggerContent()}
+      </button>
+      {isOpen && (
+        <div
+          ref={menuRef}
+          className="z-10 inline-flex min-w-[150px] flex-col gap-1 rounded-[22px] border border-neutral-200/80 bg-white/95 p-3 shadow-2xl backdrop-blur-lg dark:border-white/15 dark:bg-neutral-900/95"
+        >
+          <ReviewActionButton
+            label="Mark real"
+            tone="real"
+            icon={<RealSwipeIcon className="h-4 w-4" />}
+            onClick={() => handleDecision('real')}
+            disabled={isSubmitting}
+          />
+          <ReviewActionButton
+            label="Mark bot"
+            tone="bot"
+            icon={<BotSwipeIcon className="h-4 w-4" />}
+            onClick={() => handleDecision('bot')}
+            disabled={isSubmitting}
+          />
+          {error && (
+            <p className="px-1 pt-1 text-[9px] font-medium uppercase tracking-[0.25em] text-rose-500">
+              {error}
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewActionButton({
+  label,
+  tone,
+  icon,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  tone: 'real' | 'bot';
+  icon: ReactElement;
+  onClick: () => void;
+  disabled: boolean;
+}) {
+  const toneClasses = {
+    real: 'border-emerald-200/70 bg-emerald-50/90 text-emerald-700 hover:border-emerald-400 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-100',
+    bot: 'border-rose-200/70 bg-rose-50/90 text-rose-700 hover:border-rose-400 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100',
+  } as const;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
       className={cn(
-        'rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.35em]',
-        tone[status],
+        'inline-flex items-center gap-2 rounded-[16px] border px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.25em] transition hover:shadow-sm',
+        toneClasses[tone],
+        disabled && 'cursor-not-allowed opacity-60 hover:shadow-none',
       )}
     >
-      {label}
-    </span>
+      <span className="flex items-center gap-2 text-[10px] tracking-[0.08em]">
+        {icon}
+        {label}
+      </span>
+    </button>
   );
 }
 
@@ -1588,7 +1915,7 @@ function FloatingActions({
               className={cn(
                 'flex-1 rounded-full border border-blue-500/70 bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors',
                 'hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
-                'dark:border-blue-500/50 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-400',
+                'dark:border-blue-500/50 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-700',
                 isScrapePending && 'cursor-not-allowed opacity-50',
                 scrapeStatus.phase === 'running' &&
                   'border-emerald-500/70 bg-emerald-500 hover:bg-emerald-500 dark:border-emerald-400/80 dark:bg-emerald-500',
@@ -1605,14 +1932,14 @@ function FloatingActions({
               type="button"
               onClick={onShowBotSwipe}
               className={cn(
-                'flex-1 rounded-full border border-rose-500/60 bg-rose-500 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200',
-                'dark:border-rose-500/40 dark:bg-rose-500/80 dark:hover:bg-rose-400',
+                'flex-1 rounded-full border border-rose-500/60 bg-rose-500 py-2 pl-5 pr-1.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200',
+                'dark:border-rose-500/40 dark:bg-rose-500/80 dark:hover:bg-rose-700',
               )}
             >
               <span className="flex items-center justify-center gap-2">
                 Bot Swipe
                 {botSwipeCount > 0 && (
-                  <span className="text-[10px] uppercase tracking-[0.35em] text-white/80">
+                  <span className="inline-flex items-center justify-center rounded-full border border-white/40 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white shadow-[0_2px_8px_rgba(244,63,94,0.4)] dark:shadow-[0_2px_8px_rgba(244,63,94,0.4)]">
                     {botSwipeCount}
                   </span>
                 )}
