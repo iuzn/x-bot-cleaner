@@ -395,6 +395,14 @@ export async function removeAllBotsFromPage(
     if (result.status === 'removed') {
       removed += 1;
       botSet.delete(username);
+      try {
+        await followerClassificationStorage.removeBot(username);
+      } catch (error) {
+        console.error('[X Bot Cleaner] Failed to update removed bot state', {
+          username,
+          error,
+        });
+      }
     } else if (result.status !== 'skipped') {
       failed += 1;
     }

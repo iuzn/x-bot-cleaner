@@ -131,6 +131,7 @@ export type FollowerClassificationStorage = BaseStorage<FollowerClassificationSt
   classify: (username: string, status: FollowerStatus) => Promise<void>;
   resetUser: (username: string) => Promise<void>;
   clearBots: () => Promise<void>;
+  removeBot: (username: string) => Promise<void>;
   resetAll: () => Promise<void>;
   updateLastSweep: (timestamp: number | null) => Promise<void>;
   setHideReal: (isHidden: boolean) => Promise<void>;
@@ -151,6 +152,22 @@ const followerClassificationStorage: FollowerClassificationStorage = {
       return {
         ...state,
         botFollowers: [],
+      };
+    });
+  },
+  removeBot: async (username) => {
+    const normalized = normalizeUsername(username);
+    if (!normalized) {
+      return;
+    }
+    await storage.set((current) => {
+      const state = ensureState(current);
+      if (!state.botFollowers.includes(normalized)) {
+        return state;
+      }
+      return {
+        ...state,
+        botFollowers: state.botFollowers.filter((entry) => entry !== normalized),
       };
     });
   },
