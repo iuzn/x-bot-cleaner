@@ -40,6 +40,11 @@ type RemoveBotsOptions = {
   onProgress?: (progress: RemovalProgress) => void;
 };
 
+type EnsureFollowersOptions = {
+  autoStartCapture?: boolean;
+  autoStartRemoval?: boolean;
+};
+
 const FOLLOWERS_PATH = /\/followers(\/|$)/;
 const SUPPORTED_HOST_REGEX = /(?:^|\.)((x|twitter)\.com)$/i;
 const BUTTON_ACTIVE_ATTR = 'data-xbc-active';
@@ -91,6 +96,7 @@ let lastSnapshotCount = 0;
 let activeScrapeOptions: Required<StartScrapeOptions> = {
   ...DEFAULT_SCRAPE_OPTIONS,
 };
+let autoRemovalInFlight = false;
 
 export function initFollowerController() {
   if (initialized || typeof window === 'undefined') return;
@@ -191,6 +197,7 @@ export async function toggleVerifiedVisibility(force?: boolean) {
 
 export async function ensureFollowersPageActive(
   timeoutMs = FOLLOWERS_NAVIGATION_TIMEOUT,
+  options: EnsureFollowersOptions = {},
 ): Promise<boolean> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false;
@@ -200,13 +207,25 @@ export async function ensureFollowersPageActive(
     return true;
   }
 
-  // Yönlendirme yapılacaksa, otomatik capture başlatma flag'ini set et
-  await followerSnapshotStorage.setAutoStartCapture(true);
+  const shouldAutoCapture = Boolean(options.autoStartCapture);
+  const shouldAutoRemoval = Boolean(options.autoStartRemoval);
+
+  if (shouldAutoCapture) {
+    await followerSnapshotStorage.setAutoStartCapture(true);
+  }
+
+  if (shouldAutoRemoval) {
+    await followerClassificationStorage.setAutoStartRemoval(true);
+  }
 
   const navigated = triggerFollowersNavigation();
   if (!navigated) {
-    // Yönlendirme başarısız olduysa flag'i temizle
-    await followerSnapshotStorage.clearAutoStartCapture();
+    if (shouldAutoCapture) {
+      await followerSnapshotStorage.clearAutoStartCapture();
+    }
+    if (shouldAutoRemoval) {
+      await followerClassificationStorage.clearAutoStartRemoval();
+    }
     return false;
   }
 
@@ -367,8 +386,9 @@ function handleRouteChange() {
   startObserver();
   scheduleMetricsUpdate();
 
-  // Followers sayfası yüklendiğinde autoStartCapture flag'ini kontrol et
+  // Followers sayfası yüklendiğinde otomatik eylem flag'lerini kontrol et
   void checkAndStartAutoCapture();
+  void checkAndStartAutoRemoval();
 }
 
 function startObserver() {
@@ -1438,5 +1458,35 @@ async function checkAndStartAutoCapture() {
     await startFollowerScrape();
   } catch (error) {
     console.error('[X Bot Cleaner] Failed to start auto capture', error);
+  }
+}
+
+async function checkAndStartAutoRemoval() {
+  if (autoRemovalInFlight) {
+    return;
+  }
+
+  const state = await followerClassificationStorage.get();
+  if (!state?.autoStartRemoval) {
+    return;
+  }
+
+  await followerClassificationStorage.clearAutoStartRemoval();
+
+  if (!botSet.size) {
+    return;
+  }
+
+  autoRemovalInFlight = true;
+  try {
+    await sleep(500);
+    await removeAllBotsFromPage({
+      requireConfirmation: false,
+      alertOnFinish: false,
+    });
+  } catch (error) {
+    console.error('[X Bot Cleaner] Failed to start auto removal', error);
+  } finally {
+    autoRemovalInFlight = false;
   }
 }

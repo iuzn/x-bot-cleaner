@@ -45,6 +45,7 @@ export interface FollowerClassificationState {
   botFollowers: string[];
   preferences: FollowerPreferences;
   lastSweepAt?: number | null;
+  autoStartRemoval?: boolean;
 }
 
 export interface FollowerDomMetrics {
@@ -92,6 +93,7 @@ export const defaultFollowerClassificationState: FollowerClassificationState = {
   botFollowers: [],
   preferences: defaultFollowerPreferences,
   lastSweepAt: null,
+  autoStartRemoval: false,
 };
 
 export const defaultFollowerSnapshotState: FollowerSnapshotState = {

@@ -64,6 +64,7 @@ function ensureState(
       : [],
     preferences: mergedPreferences,
     lastSweepAt: state.lastSweepAt ?? null,
+    autoStartRemoval: state.autoStartRemoval ?? false,
   };
 }
 
@@ -136,6 +137,8 @@ export type FollowerClassificationStorage = BaseStorage<FollowerClassificationSt
   setHideVerified: (isHidden: boolean) => Promise<void>;
   toggleHideReal: () => Promise<boolean>;
   getStatusFor: (username: string) => FollowerStatus;
+  setAutoStartRemoval: (value: boolean) => Promise<void>;
+  clearAutoStartRemoval: () => Promise<void>;
 };
 
 const followerClassificationStorage: FollowerClassificationStorage = {
@@ -176,6 +179,24 @@ const followerClassificationStorage: FollowerClassificationStorage = {
     return nextValue;
   },
   getStatusFor: (username) => resolveStatus(storage.getSnapshot(), username),
+  setAutoStartRemoval: async (value: boolean) => {
+    await storage.set((current) => {
+      const state = ensureState(current);
+      return {
+        ...state,
+        autoStartRemoval: value,
+      };
+    });
+  },
+  clearAutoStartRemoval: async () => {
+    await storage.set((current) => {
+      const state = ensureState(current);
+      return {
+        ...state,
+        autoStartRemoval: false,
+      };
+    });
+  },
 };
 
 export { followerClassificationStorage, normalizeUsername, ensureState };

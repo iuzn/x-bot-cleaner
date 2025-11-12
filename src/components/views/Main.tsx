@@ -756,11 +756,44 @@ function BotSwipeShowcase({
       ) {
         event.preventDefault();
         handleUndo();
+        return;
+      }
+      if (event.key === 'ArrowRight' && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        // Simulate right swipe animation
+        const topCard = cardsRef.current[cardsRef.current.length - 1];
+        if (topCard) {
+          setDragDirections((prev) => ({
+            ...prev,
+            [topCard.username]: 'right',
+          }));
+          // Small delay to show the animation
+          setTimeout(() => {
+            handleSwipe('right');
+          }, 150);
+        }
+        return;
+      }
+      if (event.key === 'ArrowLeft' && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        // Simulate left swipe animation
+        const topCard = cardsRef.current[cardsRef.current.length - 1];
+        if (topCard) {
+          setDragDirections((prev) => ({
+            ...prev,
+            [topCard.username]: 'left',
+          }));
+          // Small delay to show the animation
+          setTimeout(() => {
+            handleSwipe('left');
+          }, 150);
+        }
+        return;
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleUndo, isOpen]);
+  }, [handleUndo, handleSwipe, isOpen]);
 
   const handleUndoAnimationComplete = useCallback((username: string) => {
     setUndoDirections((prev) => {
@@ -1151,29 +1184,18 @@ function RemoveBotsCard({
   actionDisabled: boolean;
 }) {
   const hasBots = botCount > 0;
-  const disabled =
-    actionDisabled || removalState === 'running' || botCount === 0;
-  const cardTone = hasBots
-    ? 'border-rose-200/80 bg-rose-50 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100'
-    : 'border-rose-500/80 bg-rose-500 text-white dark:border-rose-500/60 dark:bg-rose-500/80';
-  const statusText =
-    removalState === 'running'
-      ? 'Removing bots…'
-      : hasBots
-        ? `${botCount.toLocaleString()} flagged`
-        : 'No bots flagged';
-  const helperText = actionDisabled
-    ? 'Open followers list to run cleanup'
-    : removalState === 'running'
-      ? 'Cleanup in progress'
-      : hasBots
-        ? 'Start bulk removal'
-        : 'All clear';
+  const isRunning = removalState === 'running';
+  const disabled = actionDisabled || isRunning || botCount === 0;
+  const cardTone =
+    hasBots || isRunning
+      ? 'border-rose-200/80 bg-rose-50 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100'
+      : 'border-rose-500/80 bg-rose-500 text-white dark:border-rose-500/60 dark:bg-rose-500/80';
 
   return (
     <motion.button
       type="button"
       layout
+      aria-label="Remove bots"
       onClick={onRemoveBots}
       disabled={disabled}
       className={cn(
@@ -1183,29 +1205,9 @@ function RemoveBotsCard({
         !disabled && 'hover:-translate-y-0.5 hover:shadow-lg',
       )}
     >
-      <div className="flex h-full flex-col justify-between">
-        <div>
-          <p className="text-2xl font-semibold tracking-tight">Rimobu Bots</p>
-          <p
-            className={cn(
-              'text-sm font-medium',
-              hasBots
-                ? 'text-rose-600 dark:text-rose-100'
-                : 'text-white/90 dark:text-white',
-            )}
-          >
-            {statusText}
-          </p>
-        </div>
-        <p
-          className={cn(
-            'text-xs font-semibold uppercase tracking-[0.3em]',
-            hasBots
-              ? 'text-rose-400 dark:text-rose-200/80'
-              : 'text-white/70 dark:text-white/60',
-          )}
-        >
-          {helperText}
+      <div className="flex h-full items-start justify-center">
+        <p className="text-2xl font-semibold tracking-tight">
+          {isRunning ? 'Removing…' : 'Remove Bots'}
         </p>
       </div>
     </motion.button>
