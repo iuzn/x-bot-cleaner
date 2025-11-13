@@ -380,17 +380,43 @@ export async function removeAllBotsFromPage(
   const reports: BulkRemovalResult['reports'] = [];
   let removed = 0;
   let failed = 0;
+  let completed = 0;
+  const pendingTargets = new Set(targets);
+  const scroller = getFollowerScrollElement();
+  let scrollAttempts = 0;
 
-  for (let index = 0; index < targets.length; index++) {
-    const username = targets[index];
+  while (pendingTargets.size > 0) {
+    const visibleBots = getVisibleBotCells(pendingTargets);
+    if (
+      visibleBots.length === 0 &&
+      scroller &&
+      scrollAttempts < REMOVAL_SCROLL_MAX_ATTEMPTS
+    ) {
+      scrollFollowersToBottom(scroller);
+      scrollAttempts += 1;
+      await sleep(REMOVAL_SCROLL_DELAY_MS);
+      continue;
+    }
+
+    const entry = visibleBots[0];
+    const username =
+      entry?.username ?? pendingTargets.values().next().value ?? null;
+    if (!username) {
+      break;
+    }
+
+    const cell = entry?.cell;
+    pendingTargets.delete(username);
+
     options?.onProgress?.({
       total: targets.length,
-      completed: index,
+      completed,
       success: removed,
       failed,
       currentUsername: username,
     });
-    const result = await attemptRemoval(username);
+
+    const result = await attemptRemoval(username, cell);
     reports.push({ username, ...result });
     if (result.status === 'removed') {
       removed += 1;
@@ -406,6 +432,9 @@ export async function removeAllBotsFromPage(
     } else if (result.status !== 'skipped') {
       failed += 1;
     }
+
+    completed += 1;
+    scrollAttempts = 0;
     scheduleMetricsUpdate();
     await sleep(mergedOptions.delayMs);
   }
@@ -1455,11 +1484,15 @@ function ensureButtonStyles() {
 
 async function attemptRemoval(
   username: string,
+  existingCell?: HTMLElement | null,
 ): Promise<{ status: FollowerRemovalStatus; reason?: string }> {
   const result: { status: FollowerRemovalStatus; reason?: string } = {
     status: 'skipped',
   };
-  const cell = await findCellWithAutoScroll(username);
+  let cell = existingCell ?? null;
+  if (!cell || !cell.isConnected) {
+    cell = await findCellWithAutoScroll(username);
+  }
   if (!cell) {
     return { status: 'not-found', reason: 'User cell not found' };
   }
@@ -1558,6 +1591,35 @@ async function findCellWithAutoScroll(username: string) {
   }
 
   return findCellByUsername(username);
+}
+
+type VisibleBotEntry = {
+  username: string;
+  cell: HTMLElement;
+};
+
+function getVisibleBotCells(targets?: Set<string>): VisibleBotEntry[] {
+  const timelineContainer = document.querySelector<HTMLElement>(
+    '[aria-label="Timeline: Followers"]',
+  );
+  if (!timelineContainer) return [];
+
+  const candidates = Array.from(
+    timelineContainer.querySelectorAll<HTMLElement>(
+      `${USER_CELL_SELECTOR}[${STATUS_ATTRIBUTE}="bot"]`,
+    ),
+  );
+
+  return candidates
+    .map((cell) => {
+      const rawUsername = cell.getAttribute(USERNAME_ATTRIBUTE);
+      if (!rawUsername) return null;
+      const normalized = normalizeUsername(rawUsername);
+      if (!normalized) return null;
+      if (targets && !targets.has(normalized)) return null;
+      return { username: normalized, cell };
+    })
+    .filter((entry): entry is VisibleBotEntry => entry !== null);
 }
 
 function sleep(duration: number) {

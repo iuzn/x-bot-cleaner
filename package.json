@@ -1,6 +1,6 @@
 {
   "name": "x-bot-cleaner",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A Chrome extension to manually identify and bulk remove bot followers from your X (Twitter) account while preserving legitimate followers.",
   "scripts": {
     "build": "tsc --noEmit && vite build",
