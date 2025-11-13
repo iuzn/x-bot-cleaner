@@ -33,6 +33,29 @@ This permission provides temporary access to the active tab only when the user e
 
 ---
 
+### webNavigation justification (1000 character limit)
+
+The webNavigation permission is required to detect Single Page Application (SPA) route changes on X/Twitter pages. X/Twitter uses client-side routing (pushState/replaceState) for navigation between pages without full page reloads. The extension needs to:
+
+- Detect when users navigate between different X/Twitter pages (profile → followers, followers → profile, etc.)
+- Automatically reinitialize the extension's UI components when entering followers pages
+- Track navigation events to update follower classification buttons and visibility filters
+
+This permission is used only for route change detection and does not access or modify browsing history. All navigation data processing happens locally in the browser.
+
+---
+
+### tabs justification (1000 character limit)
+
+The tabs permission is required for two specific purposes related to SPA navigation tracking:
+
+- Detect tab URL updates that occur during page redirects, reloads, or external navigation
+- Complement webNavigation events for comprehensive route change detection on X/Twitter pages
+
+When combined with webNavigation, this ensures the extension reliably detects all types of navigation on X/Twitter's SPA architecture. The permission is used only to monitor URL changes on supported domains and does not access tab content or browsing history.
+
+---
+
 ### Host Permission Justification (1000 character limit)
 
 Host permissions for x.com and twitter.com are required because:
