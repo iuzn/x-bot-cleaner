@@ -11,10 +11,71 @@ const SUPPORTED_HOSTS = [
   /^https:\/\/(?:[\w-]+\.)?x\.com(?:\/|$)/i,
   /^https:\/\/(?:[\w-]+\.)?twitter\.com(?:\/|$)/i,
 ];
+const POPUP_VIEW_PATH = 'src/pages/popup/index.html';
+const POPUP_WINDOW_DIMENSIONS = {
+  width: 420,
+  height: 640,
+};
+const NEW_TAB_PATTERNS = [
+  /^about:newtab$/i,
+  /^chrome:\/\/newtab\//i,
+  /^chrome:\/\/extensions\/?/i,
+  /^https:\/\/[^/]*chromewebstore\.google\.com/i,
+  /^https:\/\/chrome\.google\.com\/.*webstore/i,
+];
 
 function isSupportedUrl(url?: string | null) {
   if (!url) return false;
   return SUPPORTED_HOSTS.some(pattern => pattern.test(url));
+}
+
+function isNewTab(url?: string | null) {
+  if (!url) return true;
+  return NEW_TAB_PATTERNS.some(pattern => pattern.test(url));
+}
+
+async function openExtensionPopupForTab(tab?: chrome.tabs.Tab) {
+  let popupConfigured = false;
+  const options =
+    typeof tab?.windowId === 'number' ? { windowId: tab.windowId } : undefined;
+
+  try {
+    await chrome.action.setPopup({ popup: POPUP_VIEW_PATH });
+    popupConfigured = true;
+    await chrome.action.openPopup(options);
+    return;
+  } catch (actionError) {
+    const popupUrl = chrome.runtime.getURL(POPUP_VIEW_PATH);
+    console.warn(
+      '[X Bot Cleaner - BG] Falling back to window popup:',
+      actionError,
+    );
+    try {
+      await chrome.windows.create({
+        url: popupUrl,
+        type: 'popup',
+        width: POPUP_WINDOW_DIMENSIONS.width,
+        height: POPUP_WINDOW_DIMENSIONS.height,
+        focused: true,
+      });
+    } catch (windowError) {
+      console.error(
+        '[X Bot Cleaner - BG] Unable to open fallback popup window:',
+        windowError,
+      );
+    }
+  } finally {
+    if (popupConfigured) {
+      try {
+        await chrome.action.setPopup({ popup: '' });
+      } catch (resetError) {
+        console.error(
+          '[X Bot Cleaner - BG] Failed to reset action popup:',
+          resetError,
+        );
+      }
+    }
+  }
 }
 
 // Helper function to detect SPA route changes
@@ -104,8 +165,9 @@ chrome.action.onClicked.addListener(async () => {
       return;
     }
 
-    if (!isSupportedUrl(tab.url)) {
-      console.warn('[X Bot Cleaner - BG] ⚠️ Action only works on x.com/twitter.com. Current URL:', tab.url);
+    const shouldUsePopup = isNewTab(tab.url) || !isSupportedUrl(tab.url);
+    if (shouldUsePopup) {
+      await openExtensionPopupForTab(tab);
       return;
     }
 

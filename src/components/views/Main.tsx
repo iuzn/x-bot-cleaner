@@ -27,6 +27,7 @@ import {
   normalizeUsername,
 } from '@/shared/storages/followerClassificationStorage';
 import { followerSnapshotStorage } from '@/shared/storages/followerSnapshotStorage';
+import followersWorkspaceStorage from '@/shared/storages/followersWorkspaceStorage';
 import { useFollowerMetrics } from '@/hooks/useFollowerMetrics';
 import {
   ensureFollowersPageActive,
@@ -48,6 +49,8 @@ import EarTag from '@/components/views/shared/EarTag';
 import { ClearDataDialog } from '@/components/views/modals/ClearDataDialog';
 import { RemoveBotsDialog } from '@/components/views/modals/RemoveBotsDialog';
 import { Switch } from '@/components/ui/switch';
+import { useClickOutside } from '@/hooks/useClickOutside';
+import visibilityStorage from '@/shared/storages/visibilityStorage';
 
 type RemovalState = 'idle' | 'running' | 'done';
 type TabId = 'insights' | 'lists';
@@ -64,6 +67,10 @@ type SwipeFollowerCard = {
 };
 
 const BOT_SWIPE_BATCH_SIZE = 8;
+const FOLLOWERS_ENTRY_URL = 'https://x.com/home';
+const POPUP_NAVIGATION_ERROR =
+  'Unable to open X in a new tab. Please try again from a browser window.';
+type PopupActionIntent = 'capture' | 'removal';
 
 const tabs: Array<{ id: TabId; label: string }> = [
   { id: 'insights', label: 'Status' },
@@ -73,6 +80,81 @@ const tabs: Array<{ id: TabId; label: string }> = [
 //       it doesn't clash with the rounded primary tabs, and include a third
 //       "Scraped" tab that renders the followerSnapshot data once the
 //       scraping feature is implemented.
+
+async function launchFollowersWorkspace(
+  intent: PopupActionIntent,
+): Promise<boolean> {
+  if (
+    typeof chrome === 'undefined' ||
+    !chrome.tabs ||
+    typeof chrome.tabs.create !== 'function'
+  ) {
+    console.error(
+      '[X Bot Cleaner] Chrome tabs API is not available in this context.',
+    );
+    return false;
+  }
+
+  try {
+    await visibilityStorage.set(true);
+    const targetUrl = await resolveFollowersEntryUrl();
+
+    if (intent === 'capture') {
+      await Promise.all([
+        followerSnapshotStorage.setAutoStartCapture(true),
+        followerClassificationStorage.clearAutoStartRemoval(),
+      ]);
+    } else {
+      await Promise.all([
+        followerClassificationStorage.setAutoStartRemoval(true),
+        followerSnapshotStorage.clearAutoStartCapture(),
+      ]);
+    }
+
+    await createTab({ url: targetUrl, active: true });
+    return true;
+  } catch (error) {
+    console.error(
+      '[X Bot Cleaner] Unable to open a followers tab from the popup.',
+      error,
+    );
+    return false;
+  }
+}
+
+function createTab(properties: chrome.tabs.CreateProperties) {
+  return new Promise<chrome.tabs.Tab>((resolve, reject) => {
+    chrome.tabs.create(properties, (tab) => {
+      const lastError = chrome.runtime.lastError;
+      if (lastError) {
+        reject(new Error(lastError.message));
+        return;
+      }
+      resolve(tab);
+    });
+  });
+}
+
+async function resolveFollowersEntryUrl() {
+  try {
+    const state = await followersWorkspaceStorage.get();
+    const persisted = sanitizeFollowersUrl(state.followersUrl);
+    return persisted ?? FOLLOWERS_ENTRY_URL;
+  } catch {
+    return FOLLOWERS_ENTRY_URL;
+  }
+}
+
+function sanitizeFollowersUrl(url?: string | null) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    parsed.hash = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
+}
 
 export default function Main() {
   const isPopup =
@@ -85,7 +167,7 @@ export default function Main() {
       : '/logo.png';
 
   const { isRootVisible, toggleRootVisibility } = isPopup
-    ? { isRootVisible: true, toggleRootVisibility: () => {} }
+    ? { isRootVisible: true, toggleRootVisibility: async () => {} }
     : useVisibility();
 
   const classification = useStorage(followerClassificationStorage);
@@ -108,6 +190,7 @@ export default function Main() {
   const [isRemoveBotsDialogOpen, setIsRemoveBotsDialogOpen] = useState(false);
   const [isPanelMenuOpen, setIsPanelMenuOpen] = useState(false);
   const panelMenuRef = useRef<HTMLDivElement | null>(null);
+  const panelContainerRef = useRef<HTMLDivElement | null>(null);
   const panelMenuId = useId();
   const closePanelMenu = useCallback(() => setIsPanelMenuOpen(false), []);
   const togglePanelMenu = useCallback(
@@ -325,6 +408,14 @@ export default function Main() {
 
     setErrorMessage(null);
 
+    if (isPopup) {
+      const launched = await launchFollowersWorkspace('removal');
+      if (!launched) {
+        setErrorMessage(POPUP_NAVIGATION_ERROR);
+      }
+      return;
+    }
+
     if (!metrics.isFollowersPage) {
       try {
         const ready = await ensureFollowersPageActive(undefined, {
@@ -369,6 +460,15 @@ export default function Main() {
   };
 
   const handleAutoScrape = async () => {
+    if (isPopup) {
+      setErrorMessage(null);
+      const launched = await launchFollowersWorkspace('capture');
+      if (!launched) {
+        setErrorMessage(POPUP_NAVIGATION_ERROR);
+      }
+      return;
+    }
+
     if (isScrapePending) return;
 
     if (scrapeStatus.phase === 'running') {
@@ -462,6 +562,16 @@ export default function Main() {
         ],
     'flex h-full flex-col',
   );
+  const hidePanel = useCallback(() => toggleRootVisibility(false), [toggleRootVisibility]);
+
+  useClickOutside(
+    isPopup,
+    isRootVisible,
+    hidePanel,
+    extensionId,
+    panelContainerRef,
+    false,
+  );
 
   return (
     <div className="relative h-full">
@@ -473,7 +583,7 @@ export default function Main() {
           badgeValue={botCount}
         />
       )}
-      <div className={panelClasses}>
+      <div ref={panelContainerRef} className={panelClasses}>
         <div className="relative flex h-full flex-col">
           <div className="px-6 pt-6">
             <div className="flex items-center justify-between gap-3">

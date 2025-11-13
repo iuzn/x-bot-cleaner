@@ -8,7 +8,9 @@ type VisibilityStorage = BaseStorage<boolean> & {
   toggle: () => Promise<void>;
 };
 
-const storage = createStorage<boolean>('visibility-storage-key', false, {
+export const VISIBILITY_STORAGE_KEY = 'visibility-storage-key';
+
+const storage = createStorage<boolean>(VISIBILITY_STORAGE_KEY, true, {
   storageType: StorageType.Local,
   liveUpdate: true,
 });

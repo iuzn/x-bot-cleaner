@@ -20,6 +20,7 @@ import type {
 } from '@/types/followers';
 import { defaultFollowerScrapeStatus } from '@/types/followers';
 import { followerMetricsStore } from '@/pages/content/followers/metricsStore';
+import followersWorkspaceStorage from '@/shared/storages/followersWorkspaceStorage';
 import {
   ACTION_BUTTON_ATTRIBUTE,
   BUTTON_CONTAINER_ATTRIBUTE,
@@ -54,6 +55,8 @@ const DEFAULT_SCRAPE_OPTIONS = {
 } as const;
 const FOLLOWERS_NAVIGATION_TIMEOUT = 15_000;
 const FOLLOWERS_NAVIGATION_POLL_INTERVAL = 300;
+const FOLLOWERS_TARGET_RESOLUTION_TIMEOUT = 8_000;
+const FOLLOWERS_TARGET_RESOLUTION_INTERVAL = 250;
 const REMOVAL_SCROLL_DELAY_MS = 900;
 const REMOVAL_SCROLL_MAX_ATTEMPTS = 80;
 const RESERVED_ROOT_ROUTES = new Set([
@@ -99,6 +102,7 @@ let activeScrapeOptions: Required<StartScrapeOptions> = {
   ...DEFAULT_SCRAPE_OPTIONS,
 };
 let autoRemovalInFlight = false;
+let followersNavigationInFlight = false;
 let routeChangeDebounceTimer: number | null = null;
 
 export function initFollowerController() {
@@ -285,7 +289,7 @@ export async function ensureFollowersPageActive(
     await followerClassificationStorage.setAutoStartRemoval(true);
   }
 
-  const navigated = triggerFollowersNavigation();
+  const navigated = await triggerFollowersNavigation();
   if (!navigated) {
     if (shouldAutoCapture) {
       await followerSnapshotStorage.clearAutoStartCapture();
@@ -492,10 +496,12 @@ function handleRouteChange() {
       scrapeStatus,
     });
     // console.log('[X Bot Cleaner - Controller] ✅ Teardown complete');
+    void maybeNavigateToFollowersPage();
     return;
   }
 
   // console.log('[X Bot Cleaner - Controller] ✅ On followers page, initializing...');
+  rememberFollowersUrl();
   ensureButtonStyles();
   processFollowers();
   applyRealVisibilityToCells();
@@ -983,15 +989,17 @@ function isFollowersPageActive() {
   return SUPPORTED_HOST_REGEX.test(hostname) && FOLLOWERS_PATH.test(pathname);
 }
 
-function triggerFollowersNavigation(): boolean {
+async function triggerFollowersNavigation(): Promise<boolean> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return false;
   }
-  const targetUrl =
-    findExistingFollowersPageUrl() ?? buildFollowersPageUrlFromProfile();
+
+  const targetUrl = await resolveFollowersTargetUrl();
   if (!targetUrl) {
     return false;
   }
+
+  rememberFollowersUrl(targetUrl);
   window.location.assign(targetUrl);
   return true;
 }
@@ -1060,6 +1068,63 @@ function extractUsernameFromPath(pathname: string): string | null {
   const candidate = normalizeUsername(segments[0]);
   if (!candidate || RESERVED_ROOT_ROUTES.has(candidate)) return null;
   return candidate;
+}
+
+async function resolveFollowersTargetUrl(): Promise<string | null> {
+  const stored = await getStoredFollowersUrl();
+  if (stored) {
+    return stored;
+  }
+
+  const immediate = findFollowersUrlFromDom();
+  if (immediate) {
+    return immediate;
+  }
+
+  return waitForFollowersUrlFromDom();
+}
+
+function findFollowersUrlFromDom(): string | null {
+  return findExistingFollowersPageUrl() ?? buildFollowersPageUrlFromProfile();
+}
+
+async function waitForFollowersUrlFromDom(): Promise<string | null> {
+  const start = Date.now();
+  while (Date.now() - start < FOLLOWERS_TARGET_RESOLUTION_TIMEOUT) {
+    await sleep(FOLLOWERS_TARGET_RESOLUTION_INTERVAL);
+    const candidate = findFollowersUrlFromDom();
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+async function getStoredFollowersUrl(): Promise<string | null> {
+  try {
+    const state = await followersWorkspaceStorage.get();
+    return sanitizeFollowersUrl(state?.followersUrl ?? null);
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeFollowersUrl(url: string | null) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    if (!SUPPORTED_HOST_REGEX.test(parsed.hostname)) {
+      return null;
+    }
+    if (!FOLLOWERS_PATH.test(parsed.pathname)) {
+      return null;
+    }
+    parsed.hash = '';
+    parsed.search = '';
+    return parsed.toString();
+  } catch {
+    return null;
+  }
 }
 
 function waitForFollowersPage(timeoutMs: number): Promise<boolean> {
@@ -1679,5 +1744,58 @@ async function checkAndStartAutoRemoval() {
     console.error('[X Bot Cleaner] Failed to start auto removal', error);
   } finally {
     autoRemovalInFlight = false;
+  }
+}
+
+async function maybeNavigateToFollowersPage() {
+  if (followersNavigationInFlight) {
+    return;
+  }
+
+  followersNavigationInFlight = true;
+
+  try {
+    const [snapshot, classification] = await Promise.all([
+      followerSnapshotStorage.get(),
+      followerClassificationStorage.get(),
+    ]);
+
+    const shouldAutoCapture = Boolean(snapshot?.autoStartCapture);
+    const shouldAutoRemoval = Boolean(classification?.autoStartRemoval);
+
+    if (!shouldAutoCapture && !shouldAutoRemoval) {
+      return;
+    }
+
+    await ensureFollowersPageActive(undefined, {
+      autoStartCapture: shouldAutoCapture,
+      autoStartRemoval: shouldAutoRemoval,
+    });
+  } catch (error) {
+    console.error(
+      '[X Bot Cleaner - Controller] Failed to auto-navigate to the followers page.',
+      error,
+    );
+  } finally {
+    followersNavigationInFlight = false;
+  }
+}
+
+function rememberFollowersUrl(url?: string | null) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    const sanitized = sanitizeFollowersUrl(url ?? window.location.href);
+    if (!sanitized) {
+      return;
+    }
+    void followersWorkspaceStorage.setFollowersUrl(sanitized);
+  } catch (error) {
+    console.error(
+      '[X Bot Cleaner - Controller] Unable to persist followers URL.',
+      error,
+    );
   }
 }

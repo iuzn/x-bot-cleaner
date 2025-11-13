@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { RefObject, useEffect } from 'react';
 
 /**
  * Click outside hook - Closes the extension when clicking outside the root element
@@ -7,33 +7,72 @@ import { useEffect } from 'react';
 export function useClickOutside(
   isPopup: boolean,
   isRootVisible: boolean,
-  toggleRootVisibility: () => void,
+  toggleRootVisibility: () => void | Promise<void>,
   extensionId: string,
+  containerRef?: RefObject<HTMLElement | null>,
+  closeOnOutside = true,
 ) {
   useEffect(() => {
-    if (isPopup) return;
+    if (isPopup || !isRootVisible || !closeOnOutside) return;
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (event.button !== 0) return;
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      if ('button' in event && event.button !== 0) return;
 
       // Find the extension's root element
       const extensionRoot = document.getElementById(
         extensionId + '-content-view-root',
       );
-      if (!extensionRoot || !isRootVisible) return;
+      if (!extensionRoot) return;
 
-      // Close if clicked outside the extension root
-      if (!extensionRoot.contains(event.target as Node)) {
-        toggleRootVisibility();
+      const shadowRoot = extensionRoot.shadowRoot;
+      const composedPath =
+        typeof event.composedPath === 'function'
+          ? event.composedPath()
+          : [event.target ?? null];
+
+      const clickedInside = composedPath.some((target) =>
+        isTargetInsideExtension(
+          target,
+          shadowRoot,
+          extensionRoot,
+          containerRef?.current ?? null,
+        ),
+      );
+
+      if (!clickedInside) {
+        void toggleRootVisibility();
       }
     };
 
-    if (isRootVisible) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('touchstart', handlePointerDown);
 
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('touchstart', handlePointerDown);
     };
-  }, [isRootVisible, toggleRootVisibility, isPopup, extensionId]);
+  }, [
+    isRootVisible,
+    toggleRootVisibility,
+    isPopup,
+    extensionId,
+    containerRef,
+    closeOnOutside,
+  ]);
+}
+
+function isTargetInsideExtension(
+  target: EventTarget | null,
+  shadowRoot: ShadowRoot | null,
+  host: HTMLElement,
+  panelElement: HTMLElement | null,
+) {
+  if (!target) return false;
+  if (target === host) return true;
+  if (!(target instanceof Node)) return false;
+
+  if (panelElement?.contains(target)) return true;
+  if (shadowRoot?.contains(target)) return true;
+
+  return false;
 }

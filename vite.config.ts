@@ -49,6 +49,7 @@ export default defineConfig({
     rollupOptions: {
       input: {
         background: resolve(pagesDir, 'background', 'index.ts'),
+        popup: resolve(pagesDir, 'popup', 'index.html'),
         contentUI: resolve(pagesDir, 'content', 'ui', 'index.ts'),
         contentStyle: resolve(pagesDir, 'content', 'style.scss'),
       },

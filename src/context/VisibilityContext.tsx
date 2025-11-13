@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { extensionId } from '@/lib/config';
-import visibilityStorage from '@/shared/storages/visibilityStorage';
+import visibilityStorage, {
+  VISIBILITY_STORAGE_KEY,
+} from '@/shared/storages/visibilityStorage';
 
 interface VisibilityContextType {
   isRootVisible: boolean;
-  toggleRootVisibility: (isVisible?: boolean) => void;
+  toggleRootVisibility: (isVisible?: boolean) => Promise<void>;
 }
 
 const VisibilityContext = createContext<VisibilityContextType | undefined>(
@@ -24,6 +26,8 @@ export function VisibilityProvider({
     setIsRootVisible(newState);
     if (root) {
       root.dataset.panelVisible = String(newState);
+      root.style.visibility = newState ? 'visible' : 'hidden';
+      root.style.pointerEvents = newState ? 'auto' : 'none';
     }
   };
 
@@ -44,8 +48,8 @@ export function VisibilityProvider({
     const handleStorageChange = (changes: {
       [key: string]: chrome.storage.StorageChange;
     }) => {
-      if (changes['visibility-storage-key']) {
-        const newValue = changes['visibility-storage-key'].newValue;
+      if (changes[VISIBILITY_STORAGE_KEY]) {
+        const newValue = changes[VISIBILITY_STORAGE_KEY].newValue;
         updateVisibility(newValue);
       }
     };
