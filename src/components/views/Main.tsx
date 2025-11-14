@@ -16,6 +16,7 @@ import {
   PanInfo,
   useMotionValue,
   useTransform,
+  Variants,
 } from 'framer-motion';
 import { Danger, Radar, ShieldTick } from 'iconsax-react';
 import { useVisibility } from '@/context/VisibilityContext';
@@ -39,19 +40,17 @@ import {
 } from '@/pages/content/followers/controller';
 import type {
   FollowerClassificationState,
-  FollowerScrapeStatus,
   FollowerSnapshotEntry,
   FollowerSnapshotState,
   FollowerStatus,
   RemovalProgress,
 } from '@/types/followers';
-import EarTag from '@/components/views/shared/EarTag';
 import { ClearDataDialog } from '@/components/views/modals/ClearDataDialog';
 import { RemoveBotsDialog } from '@/components/views/modals/RemoveBotsDialog';
 import { Switch } from '@/components/ui/switch';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import visibilityStorage from '@/shared/storages/visibilityStorage';
-
+import { Transition } from 'framer-motion';
 type RemovalState = 'idle' | 'running' | 'done';
 type TabId = 'insights' | 'lists';
 type ScrapedFilter = 'all' | 'trusted' | 'bots' | 'unreviewed';
@@ -229,28 +228,20 @@ export default function Main() {
 
   const stats = [
     {
+      label: 'Saved',
+      value: scrapedTotal.toLocaleString(),
+      description: 'Followers captured',
+      icon: Radar,
+      tone: 'blue' as const,
+      span: 1,
+    },
+    {
       label: 'Trusted',
       value: realCount,
       description: 'Accounts marked as real',
       icon: ShieldTick,
       tone: 'emerald' as const,
       span: 1,
-    },
-    {
-      label: 'Bots',
-      value: botCount,
-      description: 'Ready for cleanup',
-      icon: Danger,
-      tone: 'rose' as const,
-      span: 1,
-    },
-    {
-      label: 'Saved',
-      value: scrapedTotal.toLocaleString(),
-      description: 'profiles saved',
-      icon: Radar,
-      tone: 'blue' as const,
-      span: 2,
     },
   ];
 
@@ -551,18 +542,19 @@ export default function Main() {
 
   const panelClasses = cn(
     isPopup
-      ? 'h-full w-full bg-white dark:bg-neutral-950'
+      ? 'w-full bg-white dark:bg-neutral-950'
       : [
-          'fixed right-5 top-5 z-[2147483647] max-h-[640px] w-[380px]',
-          'rounded-[32px] border border-neutral-200/80 bg-white/95',
-          'backdrop-blur-3xl transition-all duration-500 ease-out dark:border-white/10 dark:bg-neutral-900/90',
+          'fixed right-5 top-5 z-[2147483647] h-auto max-h-[640px] w-[380px] rounded-[32px] border border-neutral-200/80 bg-white/95 backdrop-blur-3xl transition-all duration-500 ease-out dark:border-white/10 dark:bg-neutral-900/90 overflow-hidden',
           isRootVisible
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none -translate-y-2 opacity-0',
         ],
-    'flex h-full flex-col',
+    'flex flex-col',
   );
-  const hidePanel = useCallback(() => toggleRootVisibility(false), [toggleRootVisibility]);
+  const hidePanel = useCallback(
+    () => toggleRootVisibility(false),
+    [toggleRootVisibility],
+  );
 
   useClickOutside(
     isPopup,
@@ -575,16 +567,8 @@ export default function Main() {
 
   return (
     <div className="relative h-full">
-      {!isPopup && (
-        <EarTag
-          isPanelVisible={isRootVisible}
-          onToggle={(next) => toggleRootVisibility(next)}
-          logoUrl={logoUrl}
-          badgeValue={botCount}
-        />
-      )}
-      <div ref={panelContainerRef} className={panelClasses}>
-        <div className="relative flex h-full flex-col">
+      <motion.div ref={panelContainerRef} className={panelClasses}>
+        <div className="relative flex h-full flex-col overflow-y-auto">
           <div className="px-6 pt-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
@@ -593,81 +577,79 @@ export default function Main() {
                   X Bot Cleaner
                 </p>
               </div>
-              {!isPopup && (
-                <div
-                  className="relative"
-                  ref={panelMenuRef}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onTouchStart={(event) => event.stopPropagation()}
+              <div
+                className="relative"
+                ref={panelMenuRef}
+                onMouseDown={(event) => event.stopPropagation()}
+                onTouchStart={(event) => event.stopPropagation()}
+              >
+                <motion.button
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded={isPanelMenuOpen}
+                  aria-controls={panelMenuId}
+                  onClick={togglePanelMenu}
+                  whileTap={{ scale: 0.95 }}
+                  className={cn(
+                    'inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 dark:border-white/20 dark:bg-neutral-800/80 dark:text-white',
+                    isPanelMenuOpen
+                      ? 'shadow-[0_20px_45px_rgba(15,23,42,0.18)]'
+                      : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/90',
+                  )}
                 >
-                  <motion.button
-                    type="button"
-                    aria-haspopup="menu"
-                    aria-expanded={isPanelMenuOpen}
-                    aria-controls={panelMenuId}
-                    onClick={togglePanelMenu}
-                    whileTap={{ scale: 0.95 }}
-                    className={cn(
-                      'inline-flex h-9 w-9 items-center justify-center rounded-full border border-neutral-100 bg-white text-neutral-700 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 dark:border-white/20 dark:bg-neutral-800/80 dark:text-white',
-                      isPanelMenuOpen
-                        ? 'shadow-[0_20px_45px_rgba(15,23,42,0.18)]'
-                        : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/90',
-                    )}
-                  >
-                    <span className="sr-only">Open menu</span>
-                    <HamburgerIcon className="h-5 w-5" aria-hidden="true" />
-                  </motion.button>
-                  <AnimatePresence>
-                    {isPanelMenuOpen && (
-                      <motion.div
-                        id={panelMenuId}
-                        role="menu"
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onTouchStart={(event) => event.stopPropagation()}
-                        initial={{ opacity: 0, y: -6, scale: 0.9 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -6, scale: 0.95 }}
-                        transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
-                        className="z-[2147483647] absolute right-0 top-12 w-64 origin-top-right rounded-2xl border border-neutral-200/80 bg-white/95 p-2 shadow-2xl backdrop-blur-2xl dark:border-white/15 dark:bg-neutral-900/95"
-                      >
-                        <div className="flex flex-col gap-1">
-                          <motion.button
-                            type="button"
-                            role="menuitem"
-                            layout
-                            disabled={!hasSavedData || isClearingData}
-                            onClick={() => {
-                              closePanelMenu();
-                              promptClearDataDialog();
-                            }}
-                            className={cn(
-                              'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-rose-50/80 hover:text-rose-600 dark:text-neutral-100 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
-                              (!hasSavedData || isClearingData) &&
-                                'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-current',
-                            )}
-                          >
-                            <DeleteIcon className="h-5 w-5" aria-hidden="true" />
-                            <span>Clear saved data</span>
-                          </motion.button>
-                          <motion.button
-                            type="button"
-                            role="menuitem"
-                            layout
-                            onClick={() => {
-                              toggleRootVisibility(false);
-                              closePanelMenu();
-                            }}
-                            className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-neutral-100/80 dark:text-neutral-100 dark:hover:bg-neutral-800/70"
-                          >
-                            <HideIcon className="h-5 w-5" aria-hidden="true" />
-                            <span>Hide panel</span>
-                          </motion.button>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              )}
+                  <span className="sr-only">Open menu</span>
+                  <HamburgerIcon className="h-5 w-5" aria-hidden="true" />
+                </motion.button>
+                <AnimatePresence>
+                  {isPanelMenuOpen && (
+                    <motion.div
+                      id={panelMenuId}
+                      role="menu"
+                      onMouseDown={(event) => event.stopPropagation()}
+                      onTouchStart={(event) => event.stopPropagation()}
+                      initial={{ opacity: 0, y: -6, scale: 0.9 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: -6, scale: 0.95 }}
+                      transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                      className="absolute right-0 top-12 z-[2147483647] w-64 origin-top-right rounded-2xl border border-neutral-200/80 bg-white/95 p-2 shadow-2xl backdrop-blur-2xl dark:border-white/15 dark:bg-neutral-900/95"
+                    >
+                      <div className="flex flex-col gap-1">
+                        <motion.button
+                          type="button"
+                          role="menuitem"
+                          layout
+                          disabled={!hasSavedData || isClearingData}
+                          onClick={() => {
+                            closePanelMenu();
+                            promptClearDataDialog();
+                          }}
+                          className={cn(
+                            'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-rose-50/80 hover:text-rose-600 dark:text-neutral-100 dark:hover:bg-rose-500/10 dark:hover:text-rose-200',
+                            (!hasSavedData || isClearingData) &&
+                              'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-current',
+                          )}
+                        >
+                          <DeleteIcon className="h-5 w-5" aria-hidden="true" />
+                          <span>Clear saved data</span>
+                        </motion.button>
+                        <motion.button
+                          type="button"
+                          role="menuitem"
+                          layout
+                          onClick={() => {
+                            toggleRootVisibility(false);
+                            closePanelMenu();
+                          }}
+                          className="flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.3em] text-neutral-700 transition hover:bg-neutral-100/80 dark:text-neutral-100 dark:hover:bg-neutral-800/70"
+                        >
+                          <HideIcon className="h-5 w-5" aria-hidden="true" />
+                          <span>Hide panel</span>
+                        </motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
             </div>
 
             <div className="mt-5 flex items-center gap-2 rounded-full border border-neutral-200/80 bg-white/95 p-1 text-xs font-semibold uppercase tracking-[0.3em] text-neutral-500 dark:border-white/10 dark:bg-neutral-900/60">
@@ -688,8 +670,8 @@ export default function Main() {
             </div>
           </div>
 
-          <div className="relative flex-1 overflow-hidden">
-            <div className="h-full overflow-y-auto px-6 pb-36 pt-4">
+          <div className="flex flex-col gap-4">
+            <div className="h-full px-6 pt-4">
               {errorMessage && (
                 <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
                   {errorMessage}
@@ -702,6 +684,12 @@ export default function Main() {
                   removalState={removalState}
                   botCount={botCount}
                   actionDisabled={actionDisabled}
+                  onCapture={handleAutoScrape}
+                  captureCtaLabel={captureCtaLabel}
+                  isScrapePending={isScrapePending}
+                  isCapturing={scrapeStatus.phase === 'running'}
+                  onShowBotSwipe={openBotSwipe}
+                  botSwipeCount={botSwipeEntries.length}
                 />
               ) : (
                 <ListsSection
@@ -719,15 +707,9 @@ export default function Main() {
               isTogglingVerifiedVisibility={isTogglingVerifiedVisibility}
               handleToggleVisibility={handleToggleVisibility}
               handleToggleVerifiedVisibility={handleToggleVerifiedVisibility}
-              handleAutoScrape={handleAutoScrape}
-              onShowBotSwipe={openBotSwipe}
-              botSwipeCount={botSwipeEntries.length}
               removalProgress={removalProgress}
               progressPercent={progressPercent}
               activeTab={activeTab}
-              scrapeStatus={scrapeStatus}
-              isScrapePending={isScrapePending}
-              captureCtaLabel={captureCtaLabel}
             />
             <BotSwipeModal
               isOpen={isBotSwipeOpen}
@@ -753,7 +735,7 @@ export default function Main() {
             />
           </div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
@@ -1355,6 +1337,12 @@ function InsightsSection({
   removalState,
   botCount,
   actionDisabled,
+  onCapture,
+  captureCtaLabel,
+  isScrapePending,
+  isCapturing,
+  onShowBotSwipe,
+  botSwipeCount,
 }: {
   stats: Array<{
     label: string;
@@ -1368,6 +1356,12 @@ function InsightsSection({
   removalState: RemovalState;
   botCount: number;
   actionDisabled: boolean;
+  onCapture: () => void;
+  captureCtaLabel: string;
+  isScrapePending: boolean;
+  isCapturing: boolean;
+  onShowBotSwipe: () => void;
+  botSwipeCount: number;
 }) {
   const toneStyles = {
     emerald: 'text-emerald-500',
@@ -1375,73 +1369,211 @@ function InsightsSection({
     blue: 'text-blue-500',
   };
   const savedStat = stats.find((stat) => stat.label === 'Saved');
-  const SavedIcon = savedStat?.icon;
-  const primaryStats = stats.filter((stat) => stat.label !== 'Saved');
+  const trustedStat = stats.find((stat) => stat.label === 'Trusted');
+  const TrustedIcon = trustedStat?.icon;
 
   return (
     <div className="space-y-4">
       <section className="grid grid-cols-2 gap-4">
-        {primaryStats.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <motion.div
-              key={stat.label}
-              layout
-              className={cn(
-                'rounded-[28px] border border-neutral-200/80 bg-white p-4 dark:border-white/10 dark:bg-neutral-900/70',
-                stat.span === 2 && 'col-span-2',
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                    {stat.label}
-                  </p>
-                  <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
-                    {stat.value}
-                  </p>
-                </div>
-                <Icon size="32" className={toneStyles[stat.tone]} />
-              </div>
-              <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-300">
-                {stat.description}
-              </p>
-            </motion.div>
-          );
-        })}
-      </section>
-      {savedStat ? (
-        <section className="grid grid-cols-2 gap-4">
+        {savedStat && (
+          <SavedCaptureCard
+            stat={savedStat}
+            onCapture={onCapture}
+            ctaLabel={captureCtaLabel}
+            isScrapePending={isScrapePending}
+            isCapturing={isCapturing}
+          />
+        )}
+        {trustedStat && (
           <motion.div
-            key={savedStat.label}
+            key={trustedStat.label}
             layout
             className="rounded-[28px] border border-neutral-200/80 bg-white p-4 dark:border-white/10 dark:bg-neutral-900/70"
           >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                  {savedStat.label}
+                  {trustedStat.label}
                 </p>
                 <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
-                  {savedStat.value}
+                  {trustedStat.value}
                 </p>
               </div>
-              {SavedIcon && (
-                <SavedIcon size="32" className={toneStyles[savedStat.tone]} />
+              {TrustedIcon && (
+                <TrustedIcon
+                  size="32"
+                  className={toneStyles[trustedStat.tone]}
+                />
               )}
             </div>
             <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-300">
-              {savedStat.description}
+              {trustedStat.description}
             </p>
           </motion.div>
-          <RemoveBotsCard
-            botCount={botCount}
-            removalState={removalState}
-            onRemoveBots={onRemoveBots}
-            actionDisabled={actionDisabled}
-          />
-        </section>
-      ) : null}
+        )}
+      </section>
+      <section className="grid grid-cols-2 gap-4">
+        <SwipeCatchCard
+          onShowBotSwipe={onShowBotSwipe}
+          botSwipeCount={botSwipeCount}
+        />
+        <RemoveBotsCard
+          botCount={botCount}
+          removalState={removalState}
+          onRemoveBots={onRemoveBots}
+          actionDisabled={actionDisabled}
+        />
+      </section>
+    </div>
+  );
+}
+function SavedCaptureCard({
+  stat,
+  onCapture,
+  ctaLabel,
+  isScrapePending,
+  isCapturing,
+}: {
+  stat: {
+    label: string;
+    value: string | number;
+    description: string;
+    icon: typeof ShieldTick;
+  };
+  onCapture: () => void;
+  ctaLabel: string;
+  isScrapePending: boolean;
+  isCapturing: boolean;
+}) {
+  const Icon = stat.icon;
+
+  return (
+    <motion.div
+      layout
+      className="rounded-[28px] border border-neutral-200/80 bg-white p-4 dark:border-white/10 dark:bg-neutral-900/70"
+    >
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+            {stat.label}
+          </p>
+          <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
+            {stat.value}
+          </p>
+        </div>
+        <Icon size="32" className="text-blue-500" />
+      </div>
+      <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-300">
+        {stat.description}
+      </p>
+      {isCapturing && (
+        <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:bg-blue-500/10 dark:text-blue-200">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500 dark:bg-blue-300" />
+          Running
+        </span>
+      )}
+    </motion.div>
+  );
+}
+
+function SwipeCatchCard({
+  onShowBotSwipe,
+  botSwipeCount: _botSwipeCount,
+}: {
+  onShowBotSwipe: () => void;
+  botSwipeCount: number;
+}) {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <motion.button
+      type="button"
+      layout
+      onClick={onShowBotSwipe}
+      onHoverStart={() => setIsHovered(true)}
+      onHoverEnd={() => setIsHovered(false)}
+      className="group relative overflow-hidden rounded-[28px] border border-neutral-200 bg-white px-4 pb-4 pt-3 text-left text-neutral-700 transition-all duration-200 hover:bg-neutral-50 hover:text-neutral-800"
+    >
+      <div className="flex flex-col items-start justify-between gap-3">
+        <p className="text-2xl font-semibold leading-[32px] tracking-tight">
+          Swipe&apos;n Catch
+        </p>
+        <div className="mb-2 flex w-full items-end justify-end pr-4">
+          <SwipeCatchCardStack isHovered={isHovered} />
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+const swipeCatchCardTransition: Transition<any> = {
+  type: 'spring',
+  duration: 0.5,
+  stiffness: 180,
+  damping: 16,
+};
+
+const swipeCatchBaseCardVariants = {
+  rest: { rotate: 0, x: 0, y: 0, scale: 1, opacity: 1 },
+  hover: { opacity: 1, rotate: -15, x: -19, y: 0 },
+};
+
+const swipeCatchBotCardVariants = {
+  rest: { opacity: 0, rotate: 0, x: 0, y: 0 },
+  hover: { opacity: 1, rotate: -15, x: -19, y: 0 },
+};
+
+const swipeCatchIncomingCardVariants = {
+  rest: { opacity: 0, rotate: 0, x: 0, y: 0, scale: 0.9 },
+  hover: { opacity: 1, rotate: 0, x: 0, y: 0, scale: 1 },
+};
+
+const swipeCatchRealCardVariants = {
+  rest: { x: 19, y: 0, rotate: 15, opacity: 1, filter: 'blur(0px)' },
+  hover: { x: 64, y: 5, rotate: 24, opacity: 0, filter: 'blur(4px)' },
+};
+
+function SwipeCatchCardStack({ isHovered }: { isHovered: boolean }) {
+  const animationState = isHovered ? 'hover' : 'rest';
+
+  return (
+    <div className="pointer-events-none relative mr-1 mt-1 h-10 w-10">
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        variants={swipeCatchIncomingCardVariants}
+        initial="rest"
+        animate={animationState}
+        transition={swipeCatchCardTransition}
+      >
+        <SwipeStackEmptyCard className="h-20 w-auto" />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        variants={swipeCatchBaseCardVariants}
+        initial="rest"
+        animate={animationState}
+        transition={swipeCatchCardTransition}
+      >
+        <SwipeStackEmptyCard className="h-20 w-auto" />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        variants={swipeCatchBotCardVariants}
+        initial="rest"
+        animate={animationState}
+        transition={swipeCatchCardTransition}
+      >
+        <SwipeStackBotCard className="h-20 w-auto" />
+      </motion.div>
+      <motion.div
+        className="absolute inset-0 flex items-center justify-center"
+        variants={swipeCatchRealCardVariants}
+        initial="rest"
+        animate={animationState}
+        transition={{ ...swipeCatchCardTransition, stiffness: 180 }}
+      >
+        <SwipeStackRealCard className="h-20 w-auto" />
+      </motion.div>
     </div>
   );
 }
@@ -1457,18 +1589,36 @@ function RemoveBotsCard({
   onRemoveBots: () => void;
   actionDisabled: boolean;
 }) {
+  const [isTrashHovering, setIsTrashHovering] = useState(false);
   const hasBots = botCount > 0;
   const isRunning = removalState === 'running';
   const disabled = isRunning || botCount === 0;
   const navigationOnly = !disabled && actionDisabled;
   const cardTone =
     hasBots || isRunning
-      ? 'border-rose-200/80 bg-rose-50 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100'
+      ? 'border-rose-200/80 bg-rose-50 text-rose-600 dark:border-rose-500/40 dark:bg-rose-500/10 dark:text-rose-100 hover:bg-white dark:hover:bg-rose-600/20 '
       : 'border-rose-500/80 bg-rose-500 text-white dark:border-rose-500/60 dark:bg-rose-500/80';
   const iconColor =
     hasBots || isRunning
       ? 'text-rose-600/50 dark:text-rose-100/50'
       : 'text-white/50';
+  const cardStatus = isRunning
+    ? 'Cleaning in progress'
+    : hasBots
+      ? `${botCount}`
+      : 'All caught up';
+  useEffect(() => {
+    if (disabled && isTrashHovering) {
+      setIsTrashHovering(false);
+    }
+  }, [disabled, isTrashHovering]);
+  const handleHoverStart = () => {
+    if (disabled) return;
+    setIsTrashHovering(true);
+  };
+  const handleHoverEnd = () => {
+    setIsTrashHovering(false);
+  };
 
   return (
     <motion.button
@@ -1477,22 +1627,149 @@ function RemoveBotsCard({
       aria-label="Remove bots"
       onClick={onRemoveBots}
       disabled={disabled}
+      onHoverStart={handleHoverStart}
+      onHoverEnd={handleHoverEnd}
+      onFocus={handleHoverStart}
+      onBlur={handleHoverEnd}
       className={cn(
-        'relative rounded-[28px] border px-4 pb-4 pt-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
+        'relative overflow-hidden rounded-[28px] border px-4 pb-4 pt-2.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
         cardTone,
         disabled && 'cursor-not-allowed opacity-80',
         navigationOnly && 'opacity-90',
       )}
     >
-      <div className="flex h-full flex-col items-start">
+      <div className="flex h-full flex-col items-start justify-between">
         <p className="text-2xl font-semibold tracking-tight">
           {isRunning ? 'Removing…' : 'Remove Bots'}
         </p>
+        <p className="mt-2 rounded-full border border-rose-200/80 bg-white bg-opacity-70 px-2 py-0.5 text-sm font-medium tracking-wide text-rose-700 opacity-80 dark:border-rose-500/40 dark:bg-neutral-900 dark:text-rose-100">
+          {cardStatus}
+        </p>
       </div>
-      <BotSwipeIcon
-        className={cn('w-142 absolute bottom-1.5 right-3 h-14', iconColor)}
+      <RemoveBotsTrashIcon
+        isHovering={isTrashHovering}
+        className={cn(
+          'w-142 absolute bottom-2 right-2 h-16',
+          iconColor,
+          disabled && 'opacity-80',
+        )}
       />
     </motion.button>
+  );
+}
+
+const removeBotsTrashBinVariants: Variants = {
+  rest: {
+    opacity: 0,
+    y: 28,
+    scale: 0.6,
+    transition: { duration: 0.4, ease: 'easeInOut' },
+  },
+  hover: {
+    opacity: [0, 1, 1, 1],
+    y: [32, 0, 0, 0],
+    scale: [0, 1, 1, 1],
+    transition: {
+      duration: 1,
+      damping: 16,
+      stiffness: 280,
+      times: [0, 0.6, 0.8, 1],
+      ease: ['easeOut', 'easeInOut', 'easeOut', 'easeOut'] as const,
+    },
+  },
+};
+
+const removeBotsTrashLidVariants: Variants = {
+  rest: {
+    rotate: 0,
+    y: 0,
+    transition: { duration: 0.4, ease: 'easeInOut' },
+    transformOrigin: '4px 5px',
+  },
+  hover: {
+    rotate: [0, -100, -90, -45, 0],
+    y: [0, -8, -8, -8, 0],
+    x: [0, -2, -2, 0, 0],
+    transition: {
+      duration: 1.05,
+      times: [0, 0.4, 0.6, 0.8, 1],
+      ease: ['easeOut', 'easeInOut', 'easeIn', 'easeInOut', 'easeOut'] as const,
+    },
+  },
+};
+
+const removeBotsTrashBotVariants: Variants = {
+  rest: {
+    y: 0,
+    opacity: 1,
+    scale: 1,
+    filter: 'blur(0px)',
+    transition: { duration: 0.45, ease: 'easeInOut' },
+  },
+  hover: {
+    y: [0, -22, -10, 10, 20],
+    opacity: [1, 1, 1, 0.2, 0],
+    scale: [1, 0.6, 0.5, 0, 0],
+    filter: [
+      'blur(0px)',
+      'blur(0px)',
+      'blur(0px)',
+      'blur(0px)',
+      'blur(8px)',
+      'blur(10px)',
+    ],
+    transition: {
+      duration: 1.05,
+      damping: 16,
+      stiffness: 280,
+      times: [0, 0.3, 0.6, 0.9, 1],
+      ease: ['easeOut', 'easeOut', 'easeOut', 'easeIn', 'easeIn'] as const,
+    },
+  },
+};
+
+function RemoveBotsTrashIcon({
+  className = '',
+  isHovering,
+}: {
+  className?: string;
+  isHovering: boolean;
+}) {
+  const animationState = isHovering ? 'hover' : 'rest';
+
+  return (
+    <motion.svg
+      viewBox="0 0 24 24"
+      className={className}
+      fill="currentColor"
+      style={{ overflow: 'visible', transform: 'scaleX(-1)' }}
+      aria-hidden="true"
+    >
+      <motion.g
+        variants={removeBotsTrashBinVariants}
+        initial="rest"
+        animate={animationState}
+        style={{ transformOrigin: '12px 20px' }}
+      >
+        <path d="M4 10C4 8.89543 4.89543 8 6 8H18C19.1046 8 20 8.89543 20 10V20C20 21.1046 19.1046 22 18 22H6.00002C4.89546 22 4.00003 21.1046 4.00002 20L4 10ZM7 10C6.44771 10 6 10.4477 6 11V19C6 19.5523 6.44771 20 7 20H17C17.5523 20 18 19.5523 18 19V11C18 10.4477 17.5523 10 17 10H7ZM9 13C9 12.4477 9.44771 12 10 12C10.5523 12 11 12.4477 11 13V17C11 17.5523 10.5523 18 10 18C9.44771 18 9 17.5523 9 17V13ZM13 13C13 12.4477 13.4477 12 14 12C14.5523 12 15 12.4477 15 13V17C15 17.5523 14.5523 18 14 18C13.4477 18 13 17.5523 13 17V13Z" />
+        <motion.path
+          d="M15 2C16.1046 2 17 2.89543 17 4V5.00002H21C21.5523 5.00002 22 5.44774 22 6.00002C22 6.55231 21.5523 7.00002 21 7.00002H3C2.44772 7.00002 2 6.55231 2 6.00002C2 5.44774 2.44772 5.00002 3 5.00002H7V4C7 2.89543 7.89543 2 9 2H15ZM9.75 3.50002C9.33579 3.50002 9 3.83581 9 4.25002C9 4.66424 9.33579 5.00002 9.75 5.00002H14.25C14.6642 5.00002 15 4.66424 15 4.25002C15 3.83581 14.6642 3.50002 14.25 3.50002H9.75Z"
+          variants={removeBotsTrashLidVariants}
+          initial="rest"
+          animate={animationState}
+          style={{ transformOrigin: '4px 5px' }}
+          fill="currentColor"
+        />
+      </motion.g>
+      <motion.g
+        variants={removeBotsTrashBotVariants}
+        initial="rest"
+        animate={animationState}
+        style={{ transformOrigin: '12px 12px' }}
+      >
+        <BotGlyphPath fill="currentColor" />
+      </motion.g>
+    </motion.svg>
   );
 }
 
@@ -2066,14 +2343,8 @@ function FloatingActions({
   isTogglingVerifiedVisibility,
   handleToggleVisibility,
   handleToggleVerifiedVisibility,
-  handleAutoScrape,
-  onShowBotSwipe,
-  botSwipeCount,
   removalProgress,
   progressPercent,
-  scrapeStatus,
-  isScrapePending,
-  captureCtaLabel,
 }: {
   activeTab: TabId;
   hideRealOnPage: boolean;
@@ -2083,14 +2354,8 @@ function FloatingActions({
   isTogglingVerifiedVisibility: boolean;
   handleToggleVisibility: () => void;
   handleToggleVerifiedVisibility: () => void;
-  handleAutoScrape: () => void;
-  onShowBotSwipe: () => void;
-  botSwipeCount: number;
   removalProgress: RemovalProgress | null;
   progressPercent: number;
-  scrapeStatus: FollowerScrapeStatus;
-  isScrapePending: boolean;
-  captureCtaLabel: string;
 }) {
   const showActions = activeTab !== 'lists';
 
@@ -2099,7 +2364,7 @@ function FloatingActions({
   }
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-6 pb-6">
+    <div className="pointer-events-none flex justify-center px-6 pb-6">
       {showActions && (
         <div className="pointer-events-auto w-full space-y-3">
           <div className="flex items-center justify-between rounded-[26px] border border-neutral-200/80 bg-white px-5 py-3 text-neutral-700 dark:border-white/10 dark:bg-white/10 dark:text-white">
@@ -2126,44 +2391,6 @@ function FloatingActions({
               disabled={actionDisabled || isTogglingVisibility}
             />
           </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={handleAutoScrape}
-              disabled={isScrapePending}
-              className={cn(
-                'flex-1 rounded-full border border-blue-500/70 bg-blue-500 px-5 py-2.5 text-sm font-semibold text-white transition-colors',
-                'hover:bg-blue-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200',
-                'dark:border-blue-500/50 dark:bg-blue-500 dark:text-white dark:hover:bg-blue-700',
-                isScrapePending && 'cursor-not-allowed opacity-50',
-                scrapeStatus.phase === 'running' &&
-                  'border-emerald-500/70 bg-emerald-500 hover:bg-emerald-500 dark:border-emerald-400/80 dark:bg-emerald-500',
-              )}
-            >
-              <span className="flex items-center justify-center gap-2">
-                {scrapeStatus.phase === 'running' && (
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-400" />
-                )}
-                {captureCtaLabel}
-              </span>
-            </button>
-            <button
-              type="button"
-              onClick={onShowBotSwipe}
-              className={cn(
-                'flex-1 rounded-full border border-rose-500/60 bg-rose-500 py-2 pl-5 pr-1.5 text-sm font-semibold text-white transition-colors hover:bg-rose-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200',
-                'dark:border-rose-500/40 dark:bg-rose-500/80 dark:hover:bg-rose-700',
-              )}
-            >
-              <span className="flex items-center justify-center gap-2">
-                Bot Swipe
-                {botSwipeCount > 0 && (
-                  <span className="inline-flex items-center justify-center rounded-full border border-white/40 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-white shadow-[0_2px_8px_rgba(244,63,94,0.4)] dark:shadow-[0_2px_8px_rgba(244,63,94,0.4)]">
-                    {botSwipeCount}
-                  </span>
-                )}
-              </span>
-            </button>
-          </div>
         </div>
       )}
       {removalProgress && (
@@ -2189,10 +2416,7 @@ function FloatingActions({
   );
 }
 
-function HamburgerIcon({
-  className,
-  ...props
-}: SVGProps<SVGSVGElement>) {
+function HamburgerIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -2206,10 +2430,7 @@ function HamburgerIcon({
   );
 }
 
-function DeleteIcon({
-  className,
-  ...props
-}: SVGProps<SVGSVGElement>) {
+function DeleteIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -2223,10 +2444,7 @@ function DeleteIcon({
   );
 }
 
-function HideIcon({
-  className,
-  ...props
-}: SVGProps<SVGSVGElement>) {
+function HideIcon({ className, ...props }: SVGProps<SVGSVGElement>) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -2261,7 +2479,106 @@ function BotSwipeIcon({ className = '' }: { className?: string }) {
       viewBox="0 0 24 24"
       fill="currentColor"
     >
-      <path d="M13.5 2C13.5 2.44425 13.3069 2.84339 13 3.11805V5H18C19.6569 5 21 6.34315 21 8V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V8C3 6.34315 4.34315 5 6 5H11V3.11805C10.6931 2.84339 10.5 2.44425 10.5 2C10.5 1.17157 11.1716 0.5 12 0.5C12.8284 0.5 13.5 1.17157 13.5 2ZM6 7C5.44772 7 5 7.44772 5 8V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V8C19 7.44772 18.5523 7 18 7H13H11H6ZM2 10H0V16H2V10ZM22 10H24V16H22V10ZM9 14.5C9.82843 14.5 10.5 13.8284 10.5 13C10.5 12.1716 9.82843 11.5 9 11.5C8.17157 11.5 7.5 12.1716 7.5 13C7.5 13.8284 8.17157 14.5 9 14.5ZM15 14.5C15.8284 14.5 16.5 13.8284 16.5 13C16.5 12.1716 15.8284 11.5 15 11.5C14.1716 11.5 13.5 12.1716 13.5 13C13.5 13.8284 14.1716 14.5 15 14.5Z" />
+      <BotGlyphPath fill="currentColor" />
+    </svg>
+  );
+}
+
+function BotGlyphPath(props: SVGProps<SVGPathElement>) {
+  return (
+    <path
+      d="M13.5 2C13.5 2.44425 13.3069 2.84339 13 3.11805V5H18C19.6569 5 21 6.34315 21 8V18C21 19.6569 19.6569 21 18 21H6C4.34315 21 3 19.6569 3 18V8C3 6.34315 4.34315 5 6 5H11V3.11805C10.6931 2.84339 10.5 2.44425 10.5 2C10.5 1.17157 11.1716 0.5 12 0.5C12.8284 0.5 13.5 1.17157 13.5 2ZM6 7C5.44772 7 5 7.44772 5 8V18C5 18.5523 5.44772 19 6 19H18C18.5523 19 19 18.5523 19 18V8C19 7.44772 18.5523 7 18 7H6ZM2 11C2 10.4477 1.55228 10 1 10C0.447715 10 0 10.4477 0 11V15C0 15.5523 0.447715 16 1 16C1.55228 16 2 15.5523 2 15V11ZM22 11C22 10.4477 22.4477 10 23 10C23.5523 10 24 10.4477 24 11V15C24 15.5523 23.5523 16 23 16C22.4477 16 22 15.5523 22 15V11ZM9 14.5C9.82843 14.5 10.5 13.8284 10.5 13C10.5 12.1716 9.82843 11.5 9 11.5C8.17157 11.5 7.5 12.1716 7.5 13C7.5 13.8284 8.17157 14.5 9 14.5ZM15 14.5C15.8284 14.5 16.5 13.8284 16.5 13C16.5 12.1716 15.8284 11.5 15 11.5C14.1716 11.5 13.5 12.1716 13.5 13C13.5 13.8284 14.1716 14.5 15 14.5Z"
+      {...props}
+    />
+  );
+}
+
+function SwipeStackBotCard({
+  className = '',
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className={className}
+      width="32"
+      height="44"
+      viewBox="0 0 32 44"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M25.1123 0C28.9163 2.49329e-05 31.9999 3.08373 32 6.8877V37.1123C31.9999 40.9162 28.9162 43.9999 25.1123 44H6.8877C3.08375 43.9999 5.98071e-05 40.9162 0 37.1123V6.8877C0.000125277 3.08386 3.08386 0.000146913 6.8877 0H25.1123Z"
+        fill="#FF2056"
+      />
+      <path
+        d="M14.625 12.4634C14.625 11.6552 15.2406 11 16 11C16.7594 11 17.375 11.6552 17.375 12.4634C17.375 12.8968 17.1984 13.2865 16.9171 13.5544V15.3903H21.5C23.0188 15.3903 24.25 16.7008 24.25 18.3172V28.0731C24.25 29.6896 23.0188 31 21.5 31H10.5C8.98122 31 7.75 29.6896 7.75 28.0731V18.3172C7.75 16.7008 8.98122 15.3903 10.5 15.3903H15.0829V13.5544C14.8017 13.2865 14.625 12.8968 14.625 12.4634Z"
+        fill="white"
+      />
+      <path
+        d="M5 21.2204C5.00013 20.6946 5.41093 20.269 5.91711 20.269C6.42309 20.2692 6.83276 20.6947 6.83289 21.2204V25.1699C6.8327 25.6956 6.42306 26.1211 5.91711 26.1214C5.41097 26.1214 5.00018 25.6957 5 25.1699V21.2204Z"
+        fill="white"
+      />
+      <path
+        d="M25.1671 21.2204C25.1672 20.6947 25.5769 20.2692 26.0829 20.269C26.5891 20.269 26.9999 20.6946 27 21.2204V25.1699C26.9998 25.6957 26.589 26.1214 26.0829 26.1214C25.5769 26.1211 25.1673 25.6956 25.1671 25.1699V21.2204Z"
+        fill="white"
+      />
+      <path
+        d="M14.625 23.1945C14.6247 22.3866 14.0092 21.731 13.25 21.731C12.4908 21.731 11.8753 22.3866 11.875 23.1945C11.875 24.0027 12.4906 24.6579 13.25 24.6579C14.0094 24.6579 14.625 24.0027 14.625 23.1945Z"
+        fill="#FF2056"
+      />
+      <path
+        d="M20.125 23.1945C20.1247 22.3866 19.5092 21.731 18.75 21.731C17.9908 21.731 17.3753 22.3866 17.375 23.1945C17.375 24.0027 17.9906 24.6579 18.75 24.6579C19.5094 24.6579 20.125 24.0027 20.125 23.1945Z"
+        fill="#FF2056"
+      />
+    </svg>
+  );
+}
+
+function SwipeStackEmptyCard({
+  className = '',
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className={className}
+      width="32"
+      height="44"
+      viewBox="0 0 32 44"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M25.1123 0C28.9163 2.49329e-05 31.9999 3.08373 32 6.8877V37.1123C31.9999 40.9162 28.9162 43.9999 25.1123 44H6.8877C3.08375 43.9999 5.98071e-05 40.9162 0 37.1123V6.8877C0.000125277 3.08386 3.08386 0.000146913 6.8877 0H25.1123Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function SwipeStackRealCard({
+  className = '',
+  ...props
+}: SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      className={className}
+      width="32"
+      height="44"
+      viewBox="0 0 32 44"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props}
+    >
+      <path
+        d="M25.1123 0C28.9163 2.49329e-05 31.9999 3.08373 32 6.8877V37.1123C31.9999 40.9162 28.9162 43.9999 25.1123 44H6.8877C3.08375 43.9999 5.98071e-05 40.9162 0 37.1123V6.8877C0.000125277 3.08386 3.08386 0.000146913 6.8877 0H25.1123Z"
+        fill="#00D492"
+      />
+      <path
+        d="M20.7637 15.7521C21.7327 14.7492 23.304 14.7495 24.2732 15.7521C25.2423 16.7551 25.2423 18.382 24.2732 19.385L15.8588 28.094C14.6915 29.302 12.799 29.302 11.6318 28.094L6.72684 23.0168C5.75772 22.0138 5.75772 20.3881 6.72684 19.385C7.69597 18.3821 9.26727 18.3821 10.2364 19.385L13.7459 23.0168L20.7637 15.7521Z"
+        fill="white"
+      />
     </svg>
   );
 }
