@@ -751,7 +751,8 @@ function extractBio(cell: Element): string | undefined {
     if (
       normalized === 'follows you' ||
       normalized.includes('follows you') ||
-      normalized.startsWith('click to follow')
+      normalized.includes('click to follow') ||
+      normalized.includes('click to unfollow')
     ) {
       continue;
     }

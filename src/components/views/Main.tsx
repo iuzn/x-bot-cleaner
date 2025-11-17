@@ -48,6 +48,7 @@ import type {
 import { ClearDataDialog } from '@/components/views/modals/ClearDataDialog';
 import { RemoveBotsDialog } from '@/components/views/modals/RemoveBotsDialog';
 import { Switch } from '@/components/ui/switch';
+import { fireConfetti } from '@/components/ui/confetti';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import visibilityStorage from '@/shared/storages/visibilityStorage';
 import { Transition } from 'framer-motion';
@@ -176,6 +177,8 @@ export default function Main() {
   const [removalState, setRemovalState] = useState<RemovalState>('idle');
   const [removalProgress, setRemovalProgress] =
     useState<RemovalProgress | null>(null);
+  const [previousRemovalState, setPreviousRemovalState] =
+    useState<RemovalState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isTogglingVisibility, setIsTogglingVisibility] = useState(false);
   const [isTogglingVerifiedVisibility, setIsTogglingVerifiedVisibility] =
@@ -238,7 +241,7 @@ export default function Main() {
     {
       label: 'Trusted',
       value: realCount,
-      description: 'Accounts marked as real',
+      description: 'Real accounts',
       icon: ShieldTick,
       tone: 'emerald' as const,
       span: 1,
@@ -357,6 +360,14 @@ export default function Main() {
       closePanelMenu();
     }
   }, [isRootVisible, closePanelMenu]);
+
+  // Konfeti patlatma efekti - bot removal tamamlandığında
+  useEffect(() => {
+    if (removalState === 'done' && previousRemovalState === 'running') {
+      fireConfetti();
+    }
+    setPreviousRemovalState(removalState);
+  }, [removalState, previousRemovalState]);
 
   const confirmRemoveBots = async () => {
     if (removalState === 'running') return;
@@ -515,7 +526,11 @@ export default function Main() {
   const actionDisabled = !metrics.isFollowersPage;
 
   const captureCtaLabel =
-    scrapeStatus.phase === 'running' ? 'Stop Capture' : 'Capture All';
+    scrapeStatus.phase === 'running'
+      ? 'Stop Capture'
+      : scrapedTotal === 0
+        ? 'Capture all followers'
+        : 'Capture All';
 
   const openBotSwipe = () => setIsBotSwipeOpen(true);
   const closeBotSwipe = () => setIsBotSwipeOpen(false);
@@ -544,7 +559,7 @@ export default function Main() {
     isPopup
       ? 'w-full bg-white dark:bg-neutral-950'
       : [
-          'fixed right-5 top-5 z-[2147483647] h-auto max-h-[640px] w-[380px] rounded-[32px] border border-neutral-200/80 bg-white/95 backdrop-blur-3xl transition-all duration-500 ease-out dark:border-white/10 dark:bg-neutral-900/90 overflow-hidden',
+          'fixed right-5 top-5 z-[2147483647] h-[640px] w-[380px] rounded-[32px] border border-neutral-200/80 bg-white/95 backdrop-blur-3xl transition-all duration-500 ease-out dark:border-white/10 dark:bg-neutral-900/90 overflow-hidden',
           isRootVisible
             ? 'translate-y-0 opacity-100'
             : 'pointer-events-none -translate-y-2 opacity-0',
@@ -1388,17 +1403,12 @@ function InsightsSection({
           <motion.div
             key={trustedStat.label}
             layout
-            className="rounded-[28px] border border-neutral-200/80 bg-white p-4 dark:border-white/10 dark:bg-neutral-900/70"
+            className="flex min-h-[156px] flex-col justify-between rounded-[28px] border border-neutral-200/80 bg-white px-4 pb-4 pt-2.5 dark:border-white/10 dark:bg-neutral-900/70"
           >
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-                  {trustedStat.label}
-                </p>
-                <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
-                  {trustedStat.value}
-                </p>
-              </div>
+              <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+                {trustedStat.label}
+              </p>
               {TrustedIcon && (
                 <TrustedIcon
                   size="32"
@@ -1406,7 +1416,10 @@ function InsightsSection({
                 />
               )}
             </div>
-            <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-300">
+            <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
+              {trustedStat.value}
+            </p>
+            <p className="text-sm text-neutral-500 dark:text-neutral-300">
               {trustedStat.description}
             </p>
           </motion.div>
@@ -1446,33 +1459,97 @@ function SavedCaptureCard({
   isCapturing: boolean;
 }) {
   const Icon = stat.icon;
-
-  return (
-    <motion.div
-      layout
-      className="rounded-[28px] border border-neutral-200/80 bg-white p-4 dark:border-white/10 dark:bg-neutral-900/70"
+  const rawValue = stat.value;
+  const numericValue =
+    typeof rawValue === 'number'
+      ? rawValue
+      : Number(rawValue.replace(/[^\d.-]/g, '')) || 0;
+  const hasCaptures = numericValue > 0;
+  const zeroStateLabel =
+    ctaLabel === 'Stop Capture' ? 'Stop Capture' : 'Capture followers';
+  const hoverLabel = zeroStateLabel;
+  const runningIndicator = isCapturing ? (
+    <span
+      className={cn(
+        'inline-flex items-center gap-2 rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em]',
+        hasCaptures
+          ? 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-200'
+          : 'bg-white/25 text-white dark:bg-white/15 dark:text-white',
+      )}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
-            {stat.label}
+      <span
+        className={cn(
+          'h-1.5 w-1.5 animate-pulse rounded-full',
+          hasCaptures ? 'bg-blue-500 dark:bg-blue-300' : 'bg-white',
+        )}
+      />
+      Running
+    </span>
+  ) : null;
+
+  if (!hasCaptures) {
+    return (
+      <motion.button
+        type="button"
+        layout
+        aria-label={zeroStateLabel}
+        onClick={onCapture}
+        disabled={isScrapePending}
+        className={cn(
+          'relative flex h-full min-h-[156px] flex-col items-start justify-between overflow-hidden rounded-[28px] border border-blue-500/80 bg-blue-500 px-4 pb-4 pt-2.5 text-left text-white transition-all duration-200 hover:bg-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 dark:border-blue-400/60 dark:bg-blue-500/80 dark:hover:bg-blue-500/90 dark:focus-visible:ring-blue-300/50',
+          isScrapePending && 'cursor-not-allowed opacity-75',
+        )}
+      >
+        <div className="flex flex-col items-start justify-center">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-white/80">
+            {zeroStateLabel ? undefined : stat.label}
           </p>
-          <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
-            {stat.value}
+          <p className="leading-tight text-2xl font-semibold text-white">
+            {zeroStateLabel}
           </p>
         </div>
-        <Icon size="32" className="text-blue-500" />
-      </div>
-      <p className="mt-2 text-sm text-neutral-500 dark:text-neutral-300">
-        {stat.description}
-      </p>
-      {isCapturing && (
-        <span className="mt-3 inline-flex items-center gap-2 rounded-full bg-blue-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-blue-600 dark:bg-blue-500/10 dark:text-blue-200">
-          <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500 dark:bg-blue-300" />
-          Running
-        </span>
+        {runningIndicator}
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.button
+      type="button"
+      layout
+      aria-label={hoverLabel}
+      onClick={onCapture}
+      disabled={isScrapePending}
+      className={cn(
+        'group relative min-h-[156px] overflow-hidden rounded-[28px] border border-neutral-200/80 bg-white px-4 pb-4 pt-2.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-200 dark:border-white/10 dark:bg-neutral-900/70 dark:focus-visible:ring-blue-500/40',
+        isScrapePending && 'cursor-not-allowed opacity-70',
       )}
-    </motion.div>
+    >
+      <div className="flex h-full flex-col justify-between transition-opacity duration-200 group-hover:opacity-0">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-[0.3em] text-neutral-500">
+            {runningIndicator ? runningIndicator : stat.label}
+          </p>
+          <Icon size="32" className="text-blue-500" />
+        </div>
+        <p className="text-3xl font-semibold text-neutral-900 dark:text-white">
+          {stat.value}
+        </p>
+        <div>
+          <p className="text-sm text-neutral-500 dark:text-neutral-300">
+            {stat.description}
+          </p>
+        </div>
+      </div>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-[28px] bg-blue-500 px-4 pb-4 pt-2.5 text-left text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+      >
+        <p className="leading-tight text-left text-2xl font-semibold text-white">
+          {hoverLabel}
+        </p>
+      </div>
+    </motion.button>
   );
 }
 
@@ -1492,11 +1569,11 @@ function SwipeCatchCard({
       onClick={onShowBotSwipe}
       onHoverStart={() => setIsHovered(true)}
       onHoverEnd={() => setIsHovered(false)}
-      className="group relative overflow-hidden rounded-[28px] border border-neutral-200 bg-white px-4 pb-4 pt-3 text-left text-neutral-700 transition-all duration-200 hover:bg-neutral-50 hover:text-neutral-800"
+      className="group relative min-h-[156px] overflow-hidden rounded-[28px] border border-neutral-200 bg-white px-4 pb-4 pt-2.5 text-left text-neutral-700 transition-all duration-200 hover:bg-neutral-50 hover:text-neutral-800"
     >
       <div className="flex flex-col items-start justify-between gap-3">
         <p className="text-2xl font-semibold leading-[32px] tracking-tight">
-          Swipe&apos;n Catch
+          Swipe&apos;n <br /> Catch
         </p>
         <div className="mb-2 flex w-full items-end justify-end pr-4">
           <SwipeCatchCardStack isHovered={isHovered} />
@@ -1602,18 +1679,9 @@ function RemoveBotsCard({
     hasBots || isRunning
       ? 'text-rose-600/50 dark:text-rose-100/50'
       : 'text-white/50';
-  const cardStatus = isRunning
-    ? 'Cleaning in progress'
-    : hasBots
-      ? `${botCount}`
-      : 'All caught up';
-  useEffect(() => {
-    if (disabled && isTrashHovering) {
-      setIsTrashHovering(false);
-    }
-  }, [disabled, isTrashHovering]);
+  const cardStatus = `${botCount}`;
+
   const handleHoverStart = () => {
-    if (disabled) return;
     setIsTrashHovering(true);
   };
   const handleHoverEnd = () => {
@@ -1632,15 +1700,15 @@ function RemoveBotsCard({
       onFocus={handleHoverStart}
       onBlur={handleHoverEnd}
       className={cn(
-        'relative overflow-hidden rounded-[28px] border px-4 pb-4 pt-2.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
+        'relative min-h-[156px] overflow-hidden rounded-[28px] border px-4 pb-4 pt-2.5 text-left transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-200 dark:focus-visible:ring-rose-400/40',
         cardTone,
         disabled && 'cursor-not-allowed opacity-80',
         navigationOnly && 'opacity-90',
       )}
     >
       <div className="flex h-full flex-col items-start justify-between">
-        <p className="text-2xl font-semibold tracking-tight">
-          {isRunning ? 'Removing…' : 'Remove Bots'}
+        <p className="whitespace-pre-line text-2xl font-semibold tracking-tight">
+          {isRunning ? 'Removing…' : 'Remove' + '\n ' + 'Bots'}
         </p>
         <p className="mt-2 rounded-full border border-rose-200/80 bg-white bg-opacity-70 px-2 py-0.5 text-sm font-medium tracking-wide text-rose-700 opacity-80 dark:border-rose-500/40 dark:bg-neutral-900 dark:text-rose-100">
           {cardStatus}
